@@ -1,0 +1,11 @@
+# Cloned upstream checkout (large; never committed)
+/upstream/
+# Build outputs
+/out/
+/dist/
+*.AppImage
+# Downloaded runtimes / tools
+/vendor/
+/tools/bin/
+# OS / editor noise
+.DS_Store
