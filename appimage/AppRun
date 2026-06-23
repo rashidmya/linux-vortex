@@ -1,0 +1,27 @@
+#!/bin/bash
+# linvortex AppImage entrypoint.
+set -uo pipefail
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# 1. Re-pin the nxm:// handler to THIS AppImage on every launch (AppImages can be
+#    moved/renamed; $APPIMAGE is the absolute path of the running image).
+if [ -n "${APPIMAGE:-}" ] && command -v xdg-mime >/dev/null 2>&1; then
+  DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  mkdir -p "$DESKTOP_DIR"
+  sed "s|@EXEC@|$APPIMAGE|g" "$HERE/linvortex.desktop.template" > "$DESKTOP_DIR/linvortex.desktop" 2>/dev/null || true
+  update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
+  xdg-mime default linvortex.desktop x-scheme-handler/nxm >/dev/null 2>&1 || true
+fi
+
+# 2. Electron sandbox: the bundled chrome-sandbox needs SUID-root, which an AppImage
+#    cannot guarantee. If it's not SUID, disable the sandbox so the app still runs.
+SANDBOX_ARG=""
+[ -u "$HERE/chrome-sandbox" ] 2>/dev/null || SANDBOX_ARG="--no-sandbox"
+
+# 3. Match upstream nxm behaviour: pass --download only when given a URL argument
+#    (nxm:// link from the browser); plain launches get no extra args.
+if [ -n "${1:-}" ]; then
+  exec "$HERE/vortex" $SANDBOX_ARG --download "$@"
+else
+  exec "$HERE/vortex" $SANDBOX_ARG
+fi
