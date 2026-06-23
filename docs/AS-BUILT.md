@@ -19,12 +19,14 @@ capture the *intended* design; this file is the source of truth for the *built* 
 
 ## Deviations from the plan, with rationale
 
-1. **.NET runtime bundling DROPPED (plan Task 3 removed).** The plan assumed the FOMOD
-   installer needed a bundled .NET runtime at runtime. Inspection showed the Linux FOMOD
-   backend is `fomod-installer-native` — a **NativeAOT** `.node` whose `ModInstaller.Native.so`
-   links only `libstdc++`/`libgcc`/`libc` (no coreclr/hostfxr). .NET 9 is a **build-only**
-   dependency. The framework-dependent `-ipc` variant (`ModInstallerIPC` + `.runtimeconfig.json`)
-   is not the Linux path. So no ~80 MB .NET runtime is shipped.
+1. **.NET runtime IS bundled — but for `dotnetprobe`, not FOMOD.** FOMOD's Linux backend
+   is `fomod-installer-native` (NativeAOT `.node` linking only `libstdc++`/`libgcc`/`libc` —
+   no .NET runtime needed). *However*, Vortex spawns a framework-dependent `dotnetprobe` at
+   startup and treats missing/failing .NET as **fatal**. So the AppImage bundles the .NET 9
+   runtime (`AppDir/dotnet`, ~30 MB compressed), ships `dotnetprobe` into
+   `resources/app.asar.unpacked/assets/`, and `AppRun` sets `DOTNET_ROOT` → the probe reports
+   `Success: Found .NET 9.x`. (The plan's Task 3 was first dropped on the FOMOD analysis, then
+   reinstated when real-machine testing surfaced the probe crash.)
 
 2. **Build command: NOT upstream's `package:nosign` wrapper.** That wrapper runs
    `nx run-many -t build lint typecheck` concurrently across 151 projects, which OOM-killed
@@ -61,14 +63,26 @@ from the package. `build-appimage.sh` injects the `.so` next to the `.node` and 
 - ✅ **`nxm://` handler registers** (`xdg-mime` → `linvortex.desktop`, Exec re-pinned to `$APPIMAGE %u`).
 - ✅ **FOMOD native lib resolves** (`ldd`, `RUNPATH=$ORIGIN`, `.so` co-located). Smoke 10/10.
 
-## Known limitations / not yet verified
+## Known limitations — real-machine testing (2026-06-23), mostly UPSTREAM gaps
 
-- Not exercised on a real game: **game auto-detection**, **actual hardlink mod deploy**
-  (same-partition), a **real FOMOD-scripted install**, **one-click `nxm://` from a browser**.
+The native build is a Nexus **development build**, SteamOS-scoped; its Linux port is
+incomplete. Confirmed from `~/.config/Vortex/vortex.log` on CachyOS:
+
+- **Game detection is partial.** Steam scanning *works* (`found steam install folders
+  ["~/.local/share/Steam"]`, found Team Fortress 2). But many game-support plugins throw
+  **`"Currently only discovered on windows"`** (dragonage2, witcher/witcher2, sims3/4, nwn,
+  neverwinter2, worldoftanks, …) and others call **`winapi.RegGetValue`** (registry, stubbed
+  on Linux) or hit `findByAppId` gaps on GOG/Epic/Xbox stores. These need upstream code, not
+  packaging.
+- **Bethesda load-order (`gamebryo-plugin-management`) fails to load.** It depends on the
+  `loot` native module, whose `libloot` C++ library is not built/available for Linux
+  (`ld: cannot find -l../loot_api/libloot`). Upstream gap; a downstream fix would mean
+  building libloot for Linux.
+- **Fixed (ours):** the fatal `dotnetprobe ENOENT` startup crash — see deviation #1.
 - Cosmetic Wayland warnings (Vulkan/color-management); consider `--ozone-platform-hint=auto`.
-- `loot` native module failed to build during install (non-fatal; LOOT plugin sorting may be
-  unavailable). Not investigated.
-- x86_64 only; built from an upstream development branch (beta quality).
+- Still not exercised on a real game: hardlink mod **deploy** (same-partition), a real
+  **FOMOD-scripted install**, one-click **`nxm://`** from a browser.
+- x86_64 only; upstream development branch (beta).
 
 ## Follow-ups
 

@@ -13,9 +13,10 @@ echo ">> [1/4] build image"
 
 run(){ "$ENGINE" run --rm -v "$REPO_ROOT":/workspace -v "$VOL":/build -w /workspace "$IMG" bash -lc "$1"; }
 
-echo ">> [2/4] build native Vortex (pinned commit)"; run 'bash ./build/build-upstream.sh'
-echo ">> [3/4] assemble AppImage";                   run 'bash ./appimage/build-appimage.sh'
-echo ">> [4/4] smoke (static checks)";               run 'bash ./qa/smoke.sh'
+echo ">> [2/5] build native Vortex (pinned commit)"; run 'bash ./build/build-upstream.sh'
+echo ">> [3/5] fetch .NET 9 runtime";                run 'bash ./appimage/fetch-dotnet-runtime.sh'
+echo ">> [4/5] assemble AppImage";                   run 'bash ./appimage/build-appimage.sh'
+echo ">> [5/5] smoke (static checks)";               run 'bash ./qa/smoke.sh'
 
 echo
 echo ">> SUCCESS:"

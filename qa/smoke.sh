@@ -40,6 +40,20 @@ else
   no "FOMOD .node present"
 fi
 
+# .NET: bundled runtime + dotnetprobe present and actually runnable (the startup fix).
+PROBE="$APPDIR/resources/app.asar.unpacked/assets/dotnetprobe"
+[ -x "$APPDIR/dotnet/dotnet" ] && ok "bundled .NET runtime present" || no "bundled .NET runtime present"
+[ -x "$PROBE" ] && ok "dotnetprobe present + executable" || no "dotnetprobe present + executable"
+if [ -x "$PROBE" ] && [ -x "$APPDIR/dotnet/dotnet" ]; then
+  if DOTNET_ROOT="$APPDIR/dotnet" "$PROBE" 9 2>/dev/null | grep -q '^Success'; then
+    ok "dotnetprobe runs under bundled runtime (exit 0)"
+  else
+    no "dotnetprobe runs under bundled runtime (exit 0)"
+  fi
+else
+  no "dotnetprobe runs under bundled runtime (exit 0)"
+fi
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -41,6 +41,26 @@ else
 fi
 # --- end FOMOD fix ---
 
+# --- .NET runtime + dotnetprobe ---
+# Vortex spawns resources/app.asar.unpacked/assets/dotnetprobe at startup (a
+# framework-dependent .NET tool) and treats a missing/failing .NET as FATAL. Upstream
+# builds+copies the probe to src/main/build/assets but electron-builder doesn't carry it
+# into app.asar.unpacked/assets, so it's absent. Inject the probe and bundle the .NET 9
+# runtime; AppRun points DOTNET_ROOT at it so the probe runs and reports success.
+DOTNET_SRC="$REPO_ROOT/vendor/dotnet"
+test -x "$DOTNET_SRC/dotnet" || { echo "!! Missing vendored .NET runtime — run fetch-dotnet-runtime.sh" >&2; exit 1; }
+echo ">> Bundling .NET runtime -> AppDir/dotnet"
+mkdir -p "$APPDIR/dotnet"
+cp -a "$DOTNET_SRC/." "$APPDIR/dotnet/"
+
+PROBE_SRC="$(find "$BUILD_HOME/upstream/tools/dotnetprobe/dist" -maxdepth 1 -name 'dotnetprobe' -type f 2>/dev/null | head -1 || true)"
+[ -n "$PROBE_SRC" ] || { echo "!! dotnetprobe not found in build tree (tools/dotnetprobe/dist)" >&2; exit 1; }
+ASSETS_UNPACKED="$APPDIR/resources/app.asar.unpacked/assets"
+mkdir -p "$ASSETS_UNPACKED"
+install -m755 "$PROBE_SRC" "$ASSETS_UNPACKED/dotnetprobe"
+echo ">> dotnetprobe -> resources/app.asar.unpacked/assets/dotnetprobe + .NET 9 bundled"
+# --- end .NET ---
+
 # AppRun entrypoint.
 install -m755 "$REPO_ROOT/appimage/AppRun" "$APPDIR/AppRun"
 
