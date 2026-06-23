@@ -1,0 +1,33 @@
+# linvortex build image — derived from Vortex's official devcontainer
+# (docker/linux/Dockerfile.devcontainer), plus AppImage + headless-QA tooling.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Upstream build deps + our additions (xvfb for QA, fuse/file for appimagetool,
+# desktop-file-utils + xdg-utils for nxm-handler checks).
+RUN apt-get update && apt-get install -y \
+    curl git ca-certificates xz-utils file \
+    python3 python3-setuptools build-essential \
+    libfontconfig1-dev libicu-dev \
+    xvfb libfuse2 desktop-file-utils xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# .NET SDK 9.0 (required to build fomod-installer)
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 9.0
+ENV DOTNET_ROOT=/root/.dotnet
+ENV PATH="${PATH}:${DOTNET_ROOT}:${DOTNET_ROOT}/tools"
+
+# Volta + pinned Node + Corepack/pnpm, baked in (not deferred to postCreate).
+ENV VOLTA_HOME=/root/.volta
+ENV PATH="${VOLTA_HOME}/bin:${PATH}"
+RUN curl https://get.volta.sh | bash -s -- --skip-setup \
+    && volta install node@22 yarn@1 \
+    && npm install --global corepack@latest \
+    && corepack enable
+
+# appimagetool (pinned continuous release; --appimage-extract-and-run avoids needing FUSE in CI)
+RUN curl -fsSL -o /usr/local/bin/appimagetool \
+      https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage \
+    && chmod +x /usr/local/bin/appimagetool
+
+WORKDIR /workspace
