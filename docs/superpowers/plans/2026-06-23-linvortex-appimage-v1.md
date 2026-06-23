@@ -1,6 +1,8 @@
 # linvortex AppImage v1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **As-built (2026-06-23):** Implemented through M1. See [`docs/AS-BUILT.md`](../../AS-BUILT.md) for the built result and deviations — notably: **Task 3 (.NET bundling) dropped** (FOMOD native backend is NativeAOT/self-contained); the build avoids upstream's OOM-prone `package:nosign` wrapper (serial nx, no lint/typecheck); **FOMOD fixed** via co-located `ModInstaller.Native.so` + `patchelf --set-rpath '$ORIGIN'`; AppDir is app-at-root; smoke is static in-container + host-side GUI boot.
 
 **Goal:** Produce a single, self-contained, clearly-unofficial AppImage of Nexus Mods' native Linux Vortex build, from a pinned upstream commit, verified by a smoke-test gate.
 

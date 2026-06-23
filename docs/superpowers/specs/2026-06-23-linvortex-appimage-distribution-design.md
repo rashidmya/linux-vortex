@@ -1,6 +1,6 @@
 # linvortex — Unofficial Native-Vortex AppImage Distribution
 
-- **Status:** Draft for review
+- **Status:** Implemented 2026-06-23 (M0+M1) — see [`docs/AS-BUILT.md`](../../AS-BUILT.md) for what actually shipped and the deviations (notably: .NET bundling dropped — FOMOD native is NativeAOT; FOMOD fixed via co-located `.so` + `patchelf`)
 - **Date:** 2026-06-23
 - **Owner:** Rashid (packaging) — built on Nexus Mods' GPL-3.0 native Linux Vortex
 - **Upstream anchor:** `Nexus-Mods/Vortex` @ `4c39bbf` (master, 2026-06-23)
