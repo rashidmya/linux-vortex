@@ -1,0 +1,100 @@
+name: Build & Release AppImage
+
+# Cut a release by pushing a version tag:  git tag v0.1.0 && git push origin v0.1.0
+# (or run manually from the Actions tab via "Run workflow").
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write   # needed to create the Release
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Free up disk space (the Vortex build is large)
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                      /usr/share/dotnet /usr/share/swift "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies (mirrors build/Containerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl git ca-certificates xz-utils file \
+            python3 python3-setuptools build-essential \
+            libfontconfig1-dev libicu-dev desktop-file-utils xdg-utils patchelf
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Node 22 + enable corepack/pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+
+      - name: Install appimagetool
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Build native Vortex (pinned commit)
+        env:
+          BUILD_HOME: ${{ runner.temp }}/lvbuild
+        run: bash ./build/build-upstream.sh
+
+      - name: Fetch .NET 9 runtime (bundled for dotnetprobe)
+        run: bash ./appimage/fetch-dotnet-runtime.sh
+
+      - name: Assemble AppImage (+ FOMOD fix + dotnetprobe)
+        env:
+          BUILD_HOME: ${{ runner.temp }}/lvbuild
+        run: bash ./appimage/build-appimage.sh
+
+      - name: Smoke gate
+        run: bash ./qa/smoke.sh
+
+      - name: Generate release notes
+        run: |
+          PINNED="$(cat pinned-commit)"
+          {
+            echo "**UNOFFICIAL** build of [Vortex](https://github.com/Nexus-Mods/Vortex) (Nexus Mods),"
+            echo "packaged as a native Linux AppImage. **Not affiliated with or endorsed by Nexus Mods.** GPL-3.0. Beta quality."
+            echo ""
+            echo "## Download & run"
+            echo '```bash'
+            echo "chmod +x linvortex-*-x86_64.AppImage"
+            echo "./linvortex-*-x86_64.AppImage          # add --appimage-extract-and-run if you do not have libfuse2"
+            echo '```'
+            echo ""
+            echo "Self-contained (bundles Electron + .NET 9). **Wine is NOT required** to run Vortex or deploy mods —"
+            echo "only for game-specific Windows tools (e.g. Fluffy Mod Manager for RE Engine games)."
+            echo ""
+            echo "Built from upstream Vortex \`$PINNED\` — source: https://github.com/Nexus-Mods/Vortex/tree/$PINNED"
+            echo "See \`docs/UNOFFICIAL-NOTICE.md\` for licensing/trademark details."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: linvortex ${{ github.event.inputs.tag || github.ref_name }} (unofficial)
+          body_path: release-notes.md
+          files: out/linvortex-*-x86_64.AppImage
+          fail_on_unmatched_files: true
+          make_latest: true
