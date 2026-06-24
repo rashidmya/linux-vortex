@@ -7,5 +7,7 @@
 # Downloaded runtimes / tools
 /vendor/
 /tools/bin/
+# Internal planning docs (brainstorming spec + implementation plan) — kept local, not distributed
+/docs/superpowers/
 # OS / editor noise
 .DS_Store

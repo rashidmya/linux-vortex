@@ -13,16 +13,16 @@ PASS=0; FAIL=0
 ok(){ echo "PASS: $1"; PASS=$((PASS+1)); }
 no(){ echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
-APPIMAGE="$(ls "$OUT"/linvortex-*-x86_64.AppImage 2>/dev/null | head -1 || true)"
+APPIMAGE="$(ls "$OUT"/linux-vortex-*-x86_64.AppImage 2>/dev/null | head -1 || true)"
 NODE="$(find "$APPDIR" -name 'fomod-installer-native.node' 2>/dev/null | head -1 || true)"
 
 { [ -n "$APPIMAGE" ] && [ -f "$APPIMAGE" ]; } && ok "AppImage artifact exists" || no "AppImage artifact exists"
 { [ -n "$APPIMAGE" ] && [ -x "$APPIMAGE" ]; } && ok "AppImage is executable"   || no "AppImage is executable"
 [ -f "$APPDIR/vortex" ]    && ok "main binary 'vortex' present" || no "main binary 'vortex' present"
 [ -x "$APPDIR/AppRun" ]    && ok "AppRun present + executable"  || no "AppRun present + executable"
-grep -q 'x-scheme-handler/nxm' "$APPDIR/linvortex.desktop" 2>/dev/null \
+grep -q 'x-scheme-handler/nxm' "$APPDIR/linux-vortex.desktop" 2>/dev/null \
                            && ok "nxm scheme declared in desktop" || no "nxm scheme declared in desktop"
-[ -f "$APPDIR/linvortex.png" ] && ok "icon present" || no "icon present"
+[ -f "$APPDIR/linux-vortex.png" ] && ok "icon present" || no "icon present"
 
 # FOMOD native backend (the fix): .node present, .so co-located, RUNPATH=$ORIGIN, resolves.
 if [ -n "$NODE" ]; then

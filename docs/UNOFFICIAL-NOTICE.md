@@ -1,6 +1,6 @@
 # Unofficial build notice
 
-linvortex is an **unofficial** redistribution of the Linux build of
+linux-vortex is an **unofficial** redistribution of the Linux build of
 [Vortex](https://github.com/Nexus-Mods/Vortex) by Nexus Mods (Black Tree Gaming
 Ltd.). It is **not affiliated with, endorsed by, or supported by Nexus Mods.**
 
@@ -11,7 +11,7 @@ Ltd.). It is **not affiliated with, endorsed by, or supported by Nexus Mods.**
   GPL-compatible.
 - **Trademark:** "Vortex" and Nexus Mods names/logos are property of their owners.
   GPL-3.0 grants no trademark rights. This project is distributed under the name
-  **linvortex** and does not represent itself as the official product.
+  **linux-vortex** and does not represent itself as the official product.
 - **Support:** Do **not** file Vortex bugs with Nexus for issues caused by this
   packaging. Use this project's issue tracker. Confirmed upstream bugs are
   reported upstream by this project.

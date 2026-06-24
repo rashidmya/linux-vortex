@@ -43,5 +43,5 @@ build, because the native addon's required `ModInstaller.Native.so` can't be res
 - Set the addon's `RUNPATH`/`RPATH` to `$ORIGIN` at build/publish time so it finds a co-located `.so`.
 - Ensure `ModInstaller.Native.so` is shipped **next to** the `.node` in `bin/<platform>-<arch>-<abi>/`,
   and that Vortex's electron-builder `files`/`asarUnpack` globs include it.
-- (Workaround used downstream in `linvortex`: copy `ModInstaller.Native.so` next to the `.node`
+- (Workaround used downstream in `linux-vortex`: copy `ModInstaller.Native.so` next to the `.node`
   and `patchelf --set-rpath '$ORIGIN'` the `.node` during packaging.)

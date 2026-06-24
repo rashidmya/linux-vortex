@@ -4,8 +4,8 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE="${ENGINE:-docker}"
-IMG=linvortex-build:latest
-VOL=linvortex-build-cache
+IMG=linux-vortex-build:latest
+VOL=linux-vortex-build-cache
 
 echo ">> [1/4] build image"
 "$ENGINE" build -t "$IMG" -f build/Containerfile build/
@@ -20,8 +20,8 @@ echo ">> [5/5] smoke (static checks)";               run 'bash ./qa/smoke.sh'
 
 echo
 echo ">> SUCCESS:"
-ls -la "$REPO_ROOT"/out/linvortex-*-x86_64.AppImage
+ls -la "$REPO_ROOT"/out/linux-vortex-*-x86_64.AppImage
 echo
 echo "GUI boot is verified on the HOST (the build container lacks Electron runtime libs):"
-echo "  ./out/linvortex-*-x86_64.AppImage --appimage-extract-and-run   # (host needs FUSE3; or fuse2)"
+echo "  ./out/linux-vortex-*-x86_64.AppImage --appimage-extract-and-run   # (host needs FUSE3; or fuse2)"
 echo "  # or run the extracted payload directly:  ./out/AppDir/vortex --no-sandbox"

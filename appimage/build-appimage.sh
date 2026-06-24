@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assemble an AppDir from out/vortex-unpacked and package it as an AppImage.
 # No .NET bundling: the FOMOD native backend is NativeAOT (self-contained); the
-# .NET runtime is a build-only dependency. Runs INSIDE the linvortex-build container.
+# .NET runtime is a build-only dependency. Runs INSIDE the linux-vortex-build container.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$REPO_ROOT/out"
@@ -67,17 +67,17 @@ install -m755 "$REPO_ROOT/appimage/AppRun" "$APPDIR/AppRun"
 # Desktop entry: the in-AppDir copy uses a static Exec (required by appimagetool);
 # AppRun re-pins a host copy to the real $APPIMAGE path at runtime, so keep the
 # template available inside the image too.
-sed 's|@EXEC@|linvortex|g' "$REPO_ROOT/appimage/linvortex.desktop" > "$APPDIR/linvortex.desktop"
-cp "$REPO_ROOT/appimage/linvortex.desktop" "$APPDIR/linvortex.desktop.template"
+sed 's|@EXEC@|linux-vortex|g' "$REPO_ROOT/appimage/linux-vortex.desktop" > "$APPDIR/linux-vortex.desktop"
+cp "$REPO_ROOT/appimage/linux-vortex.desktop" "$APPDIR/linux-vortex.desktop.template"
 
 # Icon: not present in the unpacked app; take it from the upstream source tree.
 ICON="$(find "$BUILD_HOME/upstream/assets" -name 'vortex.png' 2>/dev/null | head -1 || true)"
 [ -n "$ICON" ] || { echo "!! Could not find vortex.png in $BUILD_HOME/upstream/assets" >&2; exit 1; }
-cp "$ICON" "$APPDIR/linvortex.png"
-cp "$ICON" "$APPDIR/usr/share/icons/hicolor/256x256/apps/linvortex.png"
+cp "$ICON" "$APPDIR/linux-vortex.png"
+cp "$ICON" "$APPDIR/usr/share/icons/hicolor/256x256/apps/linux-vortex.png"
 
-OUTFILE="$OUT/linvortex-${DATE}-g${SHORT}-x86_64.AppImage"
-rm -f "$OUT"/linvortex-*-x86_64.AppImage
+OUTFILE="$OUT/linux-vortex-${DATE}-g${SHORT}-x86_64.AppImage"
+rm -f "$OUT"/linux-vortex-*-x86_64.AppImage
 echo ">> Packaging with appimagetool -> $OUTFILE"
 ARCH=x86_64 appimagetool --appimage-extract-and-run "$APPDIR" "$OUTFILE"
 echo ">> APPIMAGE BUILT: $OUTFILE"

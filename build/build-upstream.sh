@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clone Vortex @ pinned-commit, build the native Linux app, and stage the unpacked
-# app at out/vortex-unpacked/. Runs INSIDE the linvortex-build container.
+# app at out/vortex-unpacked/. Runs INSIDE the linux-vortex-build container.
 #
 # Heavy I/O (git clone, node_modules, build) happens in $BUILD_HOME — a persistent
 # Docker *named volume* on the fast container fs — NOT on the slow Docker Desktop

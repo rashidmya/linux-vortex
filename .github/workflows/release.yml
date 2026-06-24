@@ -77,8 +77,8 @@ jobs:
             echo ""
             echo "## Download & run"
             echo '```bash'
-            echo "chmod +x linvortex-*-x86_64.AppImage"
-            echo "./linvortex-*-x86_64.AppImage          # add --appimage-extract-and-run if you do not have libfuse2"
+            echo "chmod +x linux-vortex-*-x86_64.AppImage"
+            echo "./linux-vortex-*-x86_64.AppImage          # add --appimage-extract-and-run if you do not have libfuse2"
             echo '```'
             echo ""
             echo "Self-contained (bundles Electron + .NET 9). **Wine is NOT required** to run Vortex or deploy mods —"
@@ -93,8 +93,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: linvortex ${{ github.event.inputs.tag || github.ref_name }} (unofficial)
+          name: linux-vortex ${{ github.event.inputs.tag || github.ref_name }} (unofficial)
           body_path: release-notes.md
-          files: out/linvortex-*-x86_64.AppImage
+          files: out/linux-vortex-*-x86_64.AppImage
           fail_on_unmatched_files: true
           make_latest: true

@@ -1,4 +1,4 @@
-# linvortex
+# linux-vortex
 
 An **unofficial**, distro-agnostic **AppImage** of Nexus Mods' native Linux build of
 [Vortex](https://github.com/Nexus-Mods/Vortex) — for Linux users who want a no-compile
@@ -9,19 +9,19 @@ binary. See [`docs/UNOFFICIAL-NOTICE.md`](docs/UNOFFICIAL-NOTICE.md).
 
 ## Download & run
 
-Grab the latest `linvortex-*-x86_64.AppImage` from the [**Releases**](../../releases) page,
+Grab the latest `linux-vortex-*-x86_64.AppImage` from the [**Releases**](../../releases) page,
 then:
 
 ```bash
-chmod +x linvortex-*-x86_64.AppImage
-./linvortex-*-x86_64.AppImage
+chmod +x linux-vortex-*-x86_64.AppImage
+./linux-vortex-*-x86_64.AppImage
 ```
 
 If it won't start with `failed to load libfuse.so.2`, either install FUSE 2
 (`libfuse2` / `fuse2`) or run it without FUSE:
 
 ```bash
-./linvortex-*-x86_64.AppImage --appimage-extract-and-run
+./linux-vortex-*-x86_64.AppImage --appimage-extract-and-run
 ```
 
 ## Requirements

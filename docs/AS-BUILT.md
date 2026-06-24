@@ -1,15 +1,15 @@
-# linvortex — As-Built Notes (M0 + M1, executed 2026-06-23)
+# linux-vortex — As-Built Notes (M0 + M1, executed 2026-06-23)
 
-What actually shipped, and where it deviated from the spec/plan and why. The spec
-(`docs/superpowers/specs/2026-06-23-...`) and plan (`docs/superpowers/plans/2026-06-23-...`)
-capture the *intended* design; this file is the source of truth for the *built* result.
+What actually shipped, and where it deviated from the original design and plan and why
+(the brainstorming spec and implementation plan are kept internal, not in this repo). This
+file is the source of truth for the *built* result.
 
 ## Deliverable
 
-- **`out/linvortex-<date>-g<shortSHA>-x86_64.AppImage`** (~219 MB), built from
+- **`out/linux-vortex-<date>-g<shortSHA>-x86_64.AppImage`** (~219 MB), built from
   upstream `Nexus-Mods/Vortex` @ `4c39bbf` (pinned in `pinned-commit`).
 - Build it: `ENGINE=docker ./build-all.sh`
-- Run it: `./out/linvortex-*-x86_64.AppImage --appimage-extract-and-run`
+- Run it: `./out/linux-vortex-*-x86_64.AppImage --appimage-extract-and-run`
 
 ## Pipeline (as built)
 
@@ -37,7 +37,7 @@ capture the *intended* design; this file is the source of truth for the *built* 
 
 3. **Heavy I/O on a persistent Docker named volume**, not the bind mount. `node_modules`
    over Docker Desktop's virtiofs bind mount is pathologically slow, so the clone + install +
-   build live in the `linvortex-build-cache` volume; only the unpacked app is copied to `out/`.
+   build live in the `linux-vortex-build-cache` volume; only the unpacked app is copied to `out/`.
 
 4. **AppDir layout: app-at-root** (electron-builder convention: `vortex` + `resources/` at
    AppDir root), not the `usr/lib/vortex` nesting the plan sketched.
@@ -60,7 +60,7 @@ from the package. `build-appimage.sh` injects the `.so` next to the `.node` and 
 - ✅ Native build succeeds → `out/vortex-unpacked` (740 MB, binary `vortex`).
 - ✅ AppImage assembles (219 MB).
 - ✅ **Boots and renders a window** on the host (native Wayland/X).
-- ✅ **`nxm://` handler registers** (`xdg-mime` → `linvortex.desktop`, Exec re-pinned to `$APPIMAGE %u`).
+- ✅ **`nxm://` handler registers** (`xdg-mime` → `linux-vortex.desktop`, Exec re-pinned to `$APPIMAGE %u`).
 - ✅ **FOMOD native lib resolves** (`ldd`, `RUNPATH=$ORIGIN`, `.so` co-located). Smoke 10/10.
 
 ## Known limitations — real-machine testing (2026-06-23), mostly UPSTREAM gaps

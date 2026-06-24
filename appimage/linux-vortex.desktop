@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=linvortex (unofficial Vortex)
+Name=linux-vortex (unofficial Vortex)
 Comment=Unofficial AppImage of Nexus Mods' Vortex mod manager
 Exec=@EXEC@ %u
-Icon=linvortex
+Icon=linux-vortex
 Categories=Network;Game;Utility;
 Terminal=false
 MimeType=x-scheme-handler/nxm;

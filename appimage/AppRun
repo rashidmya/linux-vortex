@@ -1,5 +1,5 @@
 #!/bin/bash
-# linvortex AppImage entrypoint.
+# linux-vortex AppImage entrypoint.
 set -uo pipefail
 HERE="$(dirname "$(readlink -f "$0")")"
 
@@ -15,9 +15,9 @@ fi
 if [ -n "${APPIMAGE:-}" ] && command -v xdg-mime >/dev/null 2>&1; then
   DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   mkdir -p "$DESKTOP_DIR"
-  sed "s|@EXEC@|$APPIMAGE|g" "$HERE/linvortex.desktop.template" > "$DESKTOP_DIR/linvortex.desktop" 2>/dev/null || true
+  sed "s|@EXEC@|$APPIMAGE|g" "$HERE/linux-vortex.desktop.template" > "$DESKTOP_DIR/linux-vortex.desktop" 2>/dev/null || true
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
-  xdg-mime default linvortex.desktop x-scheme-handler/nxm >/dev/null 2>&1 || true
+  xdg-mime default linux-vortex.desktop x-scheme-handler/nxm >/dev/null 2>&1 || true
 fi
 
 # 2. Electron sandbox: the bundled chrome-sandbox needs SUID-root, which an AppImage

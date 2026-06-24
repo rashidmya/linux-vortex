@@ -1,4 +1,4 @@
-# linvortex build image — derived from Vortex's official devcontainer
+# linux-vortex build image — derived from Vortex's official devcontainer
 # (docker/linux/Dockerfile.devcontainer), plus AppImage + headless-QA tooling.
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive

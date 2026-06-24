@@ -40,7 +40,7 @@ Linux, launches it through Wine in the game's Proton prefix (appid `3764200`):
     if (!exePath) {
       return api.showErrorNotification(`Failed to run ${TOOL_NAME}`, `Path to ${TOOL_NAME} executable could not be found. Ensure ${TOOL_NAME} is installed through Vortex.`);
     }
-    // [linvortex patch] On Linux, launch the Windows tool via Wine in the game's Proton prefix.
+    // [linux-vortex patch] On Linux, launch the Windows tool via Wine in the game's Proton prefix.
     if (process.platform === 'linux' && gamePath) {
       const winePrefix = path.join(path.resolve(gamePath, '..', '..'), 'compatdata', STEAMAPP_ID, 'pfx');
       const env = Object.assign({}, process.env, { WINEPREFIX: winePrefix, WINEDEBUG: '-all' });
