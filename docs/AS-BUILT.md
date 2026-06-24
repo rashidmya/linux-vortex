@@ -51,8 +51,8 @@ file is the source of truth for the *built* result.
 Upstream ships the FOMOD native `.node` with an **absolute build-tree `RUNPATH`**
 (`/build/upstream/...`, dead on a user's machine) and **omits its `ModInstaller.Native.so`**
 from the package. `build-appimage.sh` injects the `.so` next to the `.node` and rewrites
-`RUNPATH=$ORIGIN` via `patchelf`. This is an upstream packaging bug — see
-`docs/upstream-fomod-runpath-bug.md`.
+`RUNPATH=$ORIGIN` via `patchelf`. This is an upstream packaging bug, reported at
+https://github.com/Nexus-Mods/Vortex/issues/23565.
 
 ## Verification (2026-06-23, CachyOS host)
 
