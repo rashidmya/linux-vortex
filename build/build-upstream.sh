@@ -52,8 +52,17 @@ echo ">> nx build (serial, no lint/typecheck) ..."
 corepack pnpm nx run-many -t build --parallel=1
 echo ">> assets ..."
 corepack pnpm run assets
+# Follow upstream's exact packaging sequence (.github/actions/package): publish a CLEAN
+# dist (the publish script rimrafs ./dist, then pnpm-deploys into it, with electron-rebuild
+# skipped), rebuild native modules ONCE, then run electron-builder. Our previous shortcut
+# (the nx `package:nosign` TARGET) rebuilt + packaged together on a tree that already had
+# the natives -> electron-builder "EEXIST: link winapi.node" on a clean build.
+echo ">> publish clean dist package ..."
+VORTEX_ELECTRON_REBUILD=skip corepack pnpm nx run @vortex/main:publish
+echo ">> electron-rebuild native modules in dist ..."
+( cd "$SRC/src/main/dist" && npx --yes electron-rebuild )
 echo ">> package (electron-builder, nosign) ..."
-corepack pnpm nx run @vortex/main:package:nosign --parallel=1
+corepack pnpm -F @vortex/main run package:nosign
 
 # 3. Discover the unpacked Linux app dir (output path NOT hardcoded; the
 #    nx/electron-builder output location is in flux upstream).
