@@ -67,8 +67,12 @@ echo ">> electron-rebuild native modules in dist ..."
 # (Cached local builds lacked the obj.target copy, so this only surfaced on a fresh CI runner.)
 echo ">> stripping node-gyp obj.target duplicates ..."
 find "$SRC/src/main/dist/node_modules" -type d -name obj.target -exec rm -rf {} + 2>/dev/null || true
+# USE_HARD_LINKS=false makes electron-builder COPY (overwrite) instead of hardlink, so the
+# duplicate native-module paths in pnpm's deployed node_modules (obj.target + the .pnpm
+# store copy) no longer fail with "EEXIST: link winapi.node". This is the real clean-build
+# fix; the obj.target strip above just trims bloat. Validated locally with duplicates present.
 echo ">> package (electron-builder, nosign) ..."
-corepack pnpm -F @vortex/main run package:nosign
+USE_HARD_LINKS=false corepack pnpm -F @vortex/main run package:nosign
 
 # 3. Discover the unpacked Linux app dir (output path NOT hardcoded; the
 #    nx/electron-builder output location is in flux upstream).
