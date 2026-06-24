@@ -61,6 +61,12 @@ echo ">> publish clean dist package ..."
 VORTEX_ELECTRON_REBUILD=skip corepack pnpm nx run @vortex/main:publish
 echo ">> electron-rebuild native modules in dist ..."
 ( cd "$SRC/src/main/dist" && npx --yes electron-rebuild )
+# Strip node-gyp's build/Release/obj.target/ dirs: each holds a HARDLINKED duplicate of
+# its *.node (same inode), which electron-builder's `**/*.node` unpack rule double-links
+# to the same app.asar.unpacked destination -> "EEXIST: link winapi.node" on clean builds.
+# (Cached local builds lacked the obj.target copy, so this only surfaced on a fresh CI runner.)
+echo ">> stripping node-gyp obj.target duplicates ..."
+find "$SRC/src/main/dist/node_modules" -type d -name obj.target -exec rm -rf {} + 2>/dev/null || true
 echo ">> package (electron-builder, nosign) ..."
 corepack pnpm -F @vortex/main run package:nosign
 
