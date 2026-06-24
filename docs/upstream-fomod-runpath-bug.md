@@ -1,7 +1,8 @@
-# Upstream bug report (draft) — FOMOD native addon not portable in Linux packages
+# Upstream bug report — FOMOD native addon not portable in Linux packages
 
-> Ready-to-post draft for `Nexus-Mods/Vortex` (or the `@nexusmods/fomod-installer-native`
-> repo). Not yet submitted. Verify the package-repo before posting.
+> **Posted:** https://github.com/Nexus-Mods/Vortex/issues/23565 — filed on `Nexus-Mods/Vortex`
+> because `Nexus-Mods/fomod-installer` (home of `@nexusmods/fomod-installer-native`) has issues
+> disabled.
 
 ---
 
