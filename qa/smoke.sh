@@ -60,6 +60,12 @@ ASAR="$APPDIR/resources/app.asar"
 grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
   && ok "Linux ini backend present in app.asar" || no "Linux ini backend present in app.asar"
 
+# Witcher 3 extension resolves its documents folder inside the Proton prefix
+# (build/patch-witcher3-proton-docs.cjs).
+W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
+grep -aq 'compatdata' "$W3" 2>/dev/null \
+  && ok "witcher3 extension is Proton-prefix aware" || no "witcher3 extension is Proton-prefix aware"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

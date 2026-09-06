@@ -80,6 +80,22 @@ fails the build instead of silently dropping the fix. `qa/test-linux-ini.cjs` (8
 run in the build) exercises it through the real `IniParser`/`IniFile` API, including the
 Witcher 3 enable/disable sequence.
 
+## Witcher 3 Proton documents fix (2026-09-06)
+
+The Witcher 3 has no native Linux build; it runs in a Steam Proton prefix and reads its
+`Documents` folder from *inside* that prefix. Upstream's extension uses
+`util.getVortexPath('documents')`, i.e. `~/Documents` on Linux, so `mods.settings` and the
+`witcher3menumoddocuments` mod type were written where the game never looks — mod priority
+and enable/disable flags had no in-game effect (mods still loaded, because deployment puts
+them in `<game>/Mods` and the game defaults to loading everything there).
+
+`build/patch-witcher3-proton-docs.cjs` rewrites the extension's two documents-path helpers
+to resolve `<library>/steamapps/compatdata/<appid>/pfx/drive_c/users/<user>/Documents` from
+the discovered game path (app ids 292030 and 499450; `steamuser` then `$USER`), falling
+back to Vortex's documents path on Windows or when no prefix is found — so GOG/Epic/Heroic
+installs keep the old behaviour. Note that menu mods deployed to the old `~/Documents`
+location before this change are orphaned there and need removing by hand.
+
 ## Verification (2026-06-23, CachyOS host)
 
 - ✅ Image builds; toolchain present (node 22.23, pnpm 11.9, .NET SDK 9.0.315, appimagetool, patchelf).

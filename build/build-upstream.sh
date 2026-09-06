@@ -33,8 +33,17 @@ if [ ! -d "$SRC/.git" ]; then
 fi
 echo ">> Checking out $PINNED ..."
 git -C "$SRC" fetch --depth 1 origin "$PINNED"
-git -C "$SRC" checkout -q "$PINNED"
+# -f: the persistent volume keeps the tree from the previous run, which carries our
+# downstream source patches. Discard them and re-apply below, so a build is repeatable
+# and a pinned-commit bump doesn't fail on "local changes would be overwritten".
+git -C "$SRC" checkout -f -q "$PINNED"
 git -C "$SRC" submodule update --init --recursive --depth 1
+
+# 1b. Downstream Linux source fix: the Witcher 3 extension writes its load order file and
+#     deploys menu mods to the XDG documents dir, but the game runs under Proton and reads
+#     Documents from inside its compatibility prefix. See docs/AS-BUILT.md.
+echo ">> Patching witcher3 extension (Proton documents path) ..."
+node "$REPO_ROOT/build/patch-witcher3-proton-docs.cjs" "$SRC"
 
 # 2. Install deps, then build + package.
 #    NOTE: we deliberately do NOT use upstream's `package:nosign` wrapper, which runs
