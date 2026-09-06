@@ -81,8 +81,9 @@ jobs:
             echo "./linux-vortex-*-x86_64.AppImage          # add --appimage-extract-and-run if you do not have libfuse2"
             echo '```'
             echo ""
-            echo "Self-contained (bundles Electron + .NET 9). **Wine is NOT required** to run Vortex or deploy mods —"
-            echo "only for game-specific Windows tools (e.g. Fluffy Mod Manager for RE Engine games)."
+            echo "Self-contained (bundles Electron + .NET 9). **Wine is NOT required** to run Vortex or deploy mods."
+            echo "Windows game tools (script mergers, Fluffy Mod Manager, ...) are launched through the game's"
+            echo "Steam Proton prefix automatically; Wine is only needed for tools of non-Steam installs."
             echo ""
             echo "Built from upstream Vortex \`$PINNED\` — source: https://github.com/Nexus-Mods/Vortex/tree/$PINNED"
             echo "See \`docs/UNOFFICIAL-NOTICE.md\` for licensing/trademark details."
@@ -95,6 +96,7 @@ jobs:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           name: linux-vortex ${{ github.event.inputs.tag || github.ref_name }} (unofficial)
           body_path: release-notes.md
+          generate_release_notes: true   # append the commit changelog since the previous tag
           files: out/linux-vortex-*-x86_64.AppImage
           fail_on_unmatched_files: true
           make_latest: true
