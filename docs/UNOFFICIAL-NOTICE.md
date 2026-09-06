@@ -13,6 +13,7 @@ Ltd.). It is **not affiliated with, endorsed by, or supported by Nexus Mods.**
   GPL-3.0 grants no trademark rights. This project is distributed under the name
   **linux-vortex** and does not represent itself as the official product.
 - **Support:** Do **not** file Vortex bugs with Nexus for issues caused by this
-  packaging. Use this project's issue tracker. Confirmed upstream bugs are
-  reported upstream by this project.
+  packaging. Use this project's issue tracker. Linux bugs we hit in upstream code
+  are fixed here as build-time patches (`build/patch-*.cjs`) rather than routed to
+  Nexus.
 - **Status:** Built from a development/beta upstream branch. Expect rough edges.
