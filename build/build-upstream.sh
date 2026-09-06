@@ -59,6 +59,14 @@ corepack pnpm run assets
 # the natives -> electron-builder "EEXIST: link winapi.node" on a clean build.
 echo ">> publish clean dist package ..."
 VORTEX_ELECTRON_REBUILD=skip corepack pnpm nx run @vortex/main:publish
+# Downstream Linux dependency fix: vortex-parse-ini's only ini backend calls Win32 profile
+# functions that winapi-bindings doesn't provide off Windows, so every ini read/write in
+# Vortex throws on Linux. src/main/dist is the tree electron-builder packs into app.asar,
+# and :publish re-materialises its node_modules, so this has to happen AFTER publish.
+echo ">> Patching vortex-parse-ini (pure-JS ini backend for Linux) ..."
+node "$REPO_ROOT/build/patch-linux-ini.cjs" "$SRC/src/main/dist/node_modules"
+echo ">> Verifying the patched ini backend ..."
+node "$REPO_ROOT/qa/test-linux-ini.cjs" "$SRC/src/main/dist/node_modules/vortex-parse-ini"
 echo ">> electron-rebuild native modules in dist ..."
 ( cd "$SRC/src/main/dist" && npx --yes electron-rebuild )
 # Strip node-gyp's build/Release/obj.target/ dirs: each holds a HARDLINKED duplicate of

@@ -54,6 +54,32 @@ from the package. `build-appimage.sh` injects the `.so` next to the `.node` and 
 `RUNPATH=$ORIGIN` via `patchelf`. This is an upstream packaging bug, reported at
 https://github.com/Nexus-Mods/Vortex/issues/23565.
 
+## Linux ini fix (2026-09-06)
+
+Everything in Vortex that reads or writes an `.ini` file was broken on Linux.
+`winapi-bindings/index.js` short-circuits to `module.exports = {}` on any non-`win32`
+platform, and `vortex-parse-ini` ships exactly one backend — `WinapiFormat`, which calls
+`winapi.GetPrivateProfileSectionNames` / `GetPrivateProfileSection` /
+`WritePrivateProfileString` unconditionally. So every ini operation threw
+`TypeError: winapi.GetPrivateProfileSectionNames is not a function`.
+
+Reported as: Witcher 3 spraying "Failed to load INI structure" + "Failed to modify load
+order file" on every mod enable/disable — every deploy calls `writeToModSettings()`, which
+truncates `mods.settings`, then throws before rewriting it, so the load order file was left
+at 0 bytes. Ten bundled extensions use the same backend (witcher3, morrowind + morrowind
+plugin management, both gamebryo ini extensions, bepinex, mo-import, sims4, msfs,
+vtmbloodlines) plus Vortex core's own game-settings handling.
+
+`build/patch-linux-ini.cjs` installs `build/patches/vortex-parse-ini/WinapiFormat.js` into
+the packaged dependency tree: the Windows code path is unchanged, and when the native
+profile functions are absent it falls back to a pure-JS implementation with Win32 profile
+semantics (case-insensitive lookup, first occurrence wins, per-key edits that preserve
+comments/order/unrelated sections, encoding and line endings kept). The patch refuses to
+apply unless upstream's backend still hashes to the reviewed version, so a dependency bump
+fails the build instead of silently dropping the fix. `qa/test-linux-ini.cjs` (8 cases,
+run in the build) exercises it through the real `IniParser`/`IniFile` API, including the
+Witcher 3 enable/disable sequence.
+
 ## Verification (2026-06-23, CachyOS host)
 
 - ✅ Image builds; toolchain present (node 22.23, pnpm 11.9, .NET SDK 9.0.315, appimagetool, patchelf).

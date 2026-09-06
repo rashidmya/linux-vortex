@@ -54,6 +54,12 @@ else
   no "dotnetprobe runs under bundled runtime (exit 0)"
 fi
 
+# Linux ini backend: vortex-parse-ini's Win32-only ini backend replaced with the pure-JS
+# one (build/patch-linux-ini.cjs), packed inside app.asar.
+ASAR="$APPDIR/resources/app.asar"
+grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
+  && ok "Linux ini backend present in app.asar" || no "Linux ini backend present in app.asar"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
