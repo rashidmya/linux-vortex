@@ -74,6 +74,16 @@ grep -aq 'running Windows executable through Proton' "$ASAR" 2>/dev/null \
 grep -aq 'Could not read compatdata config_info' "$ASAR" 2>/dev/null \
   && ok "Proton build resolved from the game's prefix" || no "Proton build resolved from the game's prefix"
 
+# Proton routing matches on the working directory as well as the executable path
+# (qa/test-proton-matching.cjs, run against the packaged renderer bundle).
+RENDERER="$(mktemp -d)/renderer.js"
+if python3 "$REPO_ROOT/qa/extract-asar-file.py" "$ASAR" /renderer.js "$RENDERER" >/dev/null 2>&1 \
+   && node "$REPO_ROOT/qa/test-proton-matching.cjs" "$RENDERER" >/dev/null 2>&1; then
+  ok "Proton routing matches on working directory"
+else
+  no "Proton routing matches on working directory"
+fi
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
