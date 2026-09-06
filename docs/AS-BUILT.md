@@ -157,6 +157,10 @@ incomplete. Confirmed from `~/.config/Vortex/vortex.log` on CachyOS:
 
 ## Follow-ups
 
-- Report the FOMOD RUNPATH/.so packaging bug upstream.
-- Real-game acceptance pass.
-- Decide distribution (GitHub Release of the AppImage) — outward-facing, not yet done.
+- ~~Report the FOMOD RUNPATH/.so packaging bug upstream.~~ Filed 2026-06-24 as
+  [Nexus-Mods/Vortex#23565](https://github.com/Nexus-Mods/Vortex/issues/23565); no upstream
+  response as of 2026-09-06. Further fixes are carried downstream, not reported upstream.
+- ~~Real-game acceptance pass.~~ Done: The Witcher 3 and RE Requiem verified on CachyOS.
+- ~~Decide distribution.~~ Done: pushing a `v*` tag publishes the AppImage to Releases.
+- On every `pinned-commit` bump, re-check the anchors in all three `build/patch-*.cjs`
+  scripts and the ini backend's sha256 guard. They hard-fail the build by design.
