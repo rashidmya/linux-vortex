@@ -70,12 +70,20 @@ import type { ISteamEntry, Steam } from "./util/Steam";`,
    * ${MARKER}: find the Proton-enabled Steam game a Windows executable belongs to, if any.
    * Mirrors what StarterInfo does for game/tool launches, minus the discovery "store"
    * requirement - the executable being inside a Steam game folder is the actual evidence.
+   * Matches on the working directory as well as the executable path, as
+   * shouldRunWithProton does.
    */
-  private findProtonGameFor = async (exePath: string): Promise<ISteamEntry | undefined> => {
+  private findProtonGameFor = async (
+    exePath: string,
+    workingDirectory?: string,
+  ): Promise<ISteamEntry | undefined> => {
     try {
       const games = (await this.getSteamStore()?.allGames()) ?? [];
-      const match = games.find((game) =>
-        exePath.toLowerCase().startsWith(game.gamePath.toLowerCase()),
+      const inGameFolder = (candidate: string | undefined, gamePath: string) =>
+        candidate !== undefined && candidate.toLowerCase().startsWith(gamePath.toLowerCase());
+      const match = games.find(
+        (game) =>
+          inGameFolder(workingDirectory, game.gamePath) || inGameFolder(exePath, game.gamePath),
       );
       return match?.usesProton ? match : undefined;
     } catch (err) {
@@ -105,7 +113,7 @@ import type { ISteamEntry, Steam } from "./util/Steam";`,
     if (process.platform === "win32" || !isWindowsExecutable(executable)) {
       return this.runExecutableDirect(executable, args, options);
     }
-    return PromiseBB.resolve(this.findProtonGameFor(executable)).then((gameEntry) => {
+    return PromiseBB.resolve(this.findProtonGameFor(executable, options.cwd)).then((gameEntry) => {
       const steamStore = gameEntry !== undefined ? this.getSteamStore() : undefined;
       if (gameEntry === undefined || steamStore === undefined) {
         return this.runExecutableDirect(executable, args, options);
