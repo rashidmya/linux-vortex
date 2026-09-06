@@ -96,6 +96,35 @@ back to Vortex's documents path on Windows or when no prefix is found — so GOG
 installs keep the old behaviour. Note that menu mods deployed to the old `~/Documents`
 location before this change are orphaned there and need removing by hand.
 
+## Windows tools through Proton (2026-09-06)
+
+Vortex already runs Windows executables on Linux: `StarterInfo.runDirectly` calls
+`shouldRunWithProton()` and hands off to `Steam.runToolWithProton()`, which runs
+`<proton>/proton run <exe>` in the game's compatibility prefix. But extensions that call
+`api.runExecutable()` directly bypass all of it — among the bundled ones, `game-witcher3`
+(the script merger's "Run tool" notification action, `eventHandlers.ts:runScriptMerger`),
+`fnis-integration` and `gamestore-gog`, plus most community game extensions. Spawning a PE
+binary on Linux fails with `EACCES`, which Vortex renders as
+"Network connect was not permitted, please check your firewall settings".
+
+`build/patch-linux-proton-tools.cjs` makes two source changes:
+
+1. **`ExtensionManager.ts`** — `api.runExecutable` applies the same Proton routing: on
+   non-Windows, if the executable is a Windows one and lives inside a Steam game folder that
+   has a compatdata prefix, it goes through `Steam.runToolWithProton`. No recursion — the
+   Proton launcher isn't a Windows executable. Note this deliberately does *not* require the
+   discovery `store` field that `shouldRunWithProton` checks; the executable sitting inside a
+   Steam game folder is the actual evidence.
+2. **`util/linux/proton.ts`** — when Steam has no `CompatToolMapping` entry for the game
+   (i.e. it's on the default), prefer the Proton build recorded in the prefix's own
+   `compatdata/<appid>/config_info` over "newest installed". Running a different build against
+   a prefix makes Proton upgrade or downgrade it behind the user's back.
+
+Verified by hand before building: `STEAM_COMPAT_DATA_PATH=… STEAM_COMPAT_CLIENT_INSTALL_PATH=…
+"<proton>/proton" run WitcherScriptMerger.exe` starts the merger (Proton bundles wine-mono,
+so the .NET tool runs). The wine-based `extras/patch-re-fluffy.cjs` workaround is superseded
+by this for Steam/Proton games, though it remains valid for non-Steam installs.
+
 ## Verification (2026-06-23, CachyOS host)
 
 - ✅ Image builds; toolchain present (node 22.23, pnpm 11.9, .NET SDK 9.0.315, appimagetool, patchelf).

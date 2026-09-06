@@ -66,6 +66,14 @@ W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
 grep -aq 'compatdata' "$W3" 2>/dev/null \
   && ok "witcher3 extension is Proton-prefix aware" || no "witcher3 extension is Proton-prefix aware"
 
+# Windows tools launched by extensions are routed through Proton
+# (build/patch-linux-proton-tools.cjs).
+grep -aq 'running Windows executable through Proton' "$ASAR" 2>/dev/null \
+  && ok "api.runExecutable routes Windows tools through Proton" \
+  || no "api.runExecutable routes Windows tools through Proton"
+grep -aq 'Could not read compatdata config_info' "$ASAR" 2>/dev/null \
+  && ok "Proton build resolved from the game's prefix" || no "Proton build resolved from the game's prefix"
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

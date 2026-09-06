@@ -45,6 +45,12 @@ git -C "$SRC" submodule update --init --recursive --depth 1
 echo ">> Patching witcher3 extension (Proton documents path) ..."
 node "$REPO_ROOT/build/patch-witcher3-proton-docs.cjs" "$SRC"
 
+# 1c. Downstream Linux source fix: api.runExecutable spawns Windows executables directly,
+#     which fails on Linux (EACCES, reported as a bogus firewall error). Route them through
+#     Proton the way StarterInfo already does. See docs/AS-BUILT.md.
+echo ">> Patching core (run Windows tools through Proton) ..."
+node "$REPO_ROOT/build/patch-linux-proton-tools.cjs" "$SRC"
+
 # 2. Install deps, then build + package.
 #    NOTE: we deliberately do NOT use upstream's `package:nosign` wrapper, which runs
 #    `nx run-many -t build lint typecheck` concurrently across 151 projects. On the
