@@ -1,0 +1,90 @@
+name: Build AppImage
+
+# The PR gate. Also reusable: release.yml and upstream-bump.yml both call it so the
+# runner setup below exists in exactly one place (build/Containerfile is the other copy,
+# for local Docker builds).
+on:
+  pull_request:
+    # A docs-only PR should not burn an hour of CI.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to build. Defaults to the ref that triggered the run.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Free up disk space (the Vortex build is large)
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+                      /usr/share/dotnet /usr/share/swift "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      # inputs.ref matters when a *scheduled* workflow calls this one: github.ref would be
+      # the default branch, so we would build the OLD pin and report a misleading green.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install build dependencies (mirrors build/Containerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl git ca-certificates xz-utils file \
+            python3 python3-setuptools build-essential \
+            libfontconfig1-dev libicu-dev desktop-file-utils xdg-utils patchelf
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Node 22 + enable corepack/pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+
+      - name: Install appimagetool
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Build native Vortex (pinned commit)
+        env:
+          BUILD_HOME: ${{ runner.temp }}/lvbuild
+        run: bash ./build/build-upstream.sh
+
+      - name: Fetch .NET 9 runtime (bundled for dotnetprobe)
+        run: bash ./appimage/fetch-dotnet-runtime.sh
+
+      - name: Assemble AppImage (+ FOMOD fix + dotnetprobe)
+        env:
+          BUILD_HOME: ${{ runner.temp }}/lvbuild
+        run: bash ./appimage/build-appimage.sh
+
+      - name: Smoke gate
+        run: bash ./qa/smoke.sh
+
+      # Downloaded by release.yml to publish, and by a human to do the host GUI pass on a
+      # bump PR. The zip strips the executable bit; chmod +x after extracting.
+      - name: Upload the AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-vortex-appimage
+          path: out/linux-vortex-*-x86_64.AppImage
+          retention-days: 14
+          if-no-files-found: error
