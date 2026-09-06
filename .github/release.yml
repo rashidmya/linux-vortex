@@ -1,0 +1,13 @@
+# Groups the auto-generated release notes (generate_release_notes in
+# .github/workflows/release.yml). PRs land in the first category whose label
+# they carry; unlabelled PRs fall through to "Other changes".
+changelog:
+  categories:
+    - title: Linux fixes
+      labels: ['bug']
+    - title: Build & packaging
+      labels: ['enhancement']
+    - title: Documentation
+      labels: ['documentation']
+    - title: Other changes
+      labels: ['*']
