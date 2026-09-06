@@ -14,7 +14,16 @@ ok(){ echo "PASS: $1"; PASS=$((PASS+1)); }
 no(){ echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
 APPIMAGE="$(ls "$OUT"/linux-vortex-*-x86_64.AppImage 2>/dev/null | head -1 || true)"
-NODE="$(find "$APPDIR" -name 'fomod-installer-native.node' 2>/dev/null | head -1 || true)"
+# The FOMOD .node that actually gets loaded is chosen by node-gyp-build, which prefers
+# build/Release/ over prebuilds/ (see node-gyp-build.js). Resolve it the same way instead
+# of hardcoding a filename: upstream repackages this module between releases, and v2.6.3
+# dropped the bin/<platform>-<abi>/ copy an earlier filename check relied on.
+FOMOD_PKG="$(find "$APPDIR" -type d -path '*@nexusmods/fomod-installer-native' 2>/dev/null | head -1 || true)"
+NODE=""
+if [ -n "$FOMOD_PKG" ]; then
+  NODE="$(find "$FOMOD_PKG/build/Release" -name '*.node' 2>/dev/null | head -1 || true)"
+  [ -n "$NODE" ] || NODE="$(find "$FOMOD_PKG" -name '*.node' 2>/dev/null | head -1 || true)"
+fi
 
 { [ -n "$APPIMAGE" ] && [ -f "$APPIMAGE" ]; } && ok "AppImage artifact exists" || no "AppImage artifact exists"
 { [ -n "$APPIMAGE" ] && [ -x "$APPIMAGE" ]; } && ok "AppImage is executable"   || no "AppImage is executable"
