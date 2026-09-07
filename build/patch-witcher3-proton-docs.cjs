@@ -11,8 +11,9 @@
  *
  * The prefix itself is resolved by util.getGameDocumentsPath(gamePath), installed into
  * Vortex core by build/patch-linux-game-paths.cjs (run that first). This script threads
- * the discovered game path to the extension's three documents-path sites: the load order
- * file, the menu mod deployment target, and the "open documents folder" toolbar action.
+ * the discovered game path to every documents-path site in the extension: the load order
+ * file (iniParser, index, mergeBackup), the menu mod deployment target, the settings
+ * mergers, and the "open documents folder" toolbar action.
  *
  * Usage: node build/patch-witcher3-proton-docs.cjs <upstream Vortex source root>
  * Idempotent; fails the build if any anchor is missing, so an upstream change to these
@@ -33,8 +34,8 @@ const EDITS = [
 }`,
     replace: `// ${MARKER}: The Witcher 3 has no native Linux build - it runs in a Steam
 // Proton (Wine) prefix and reads "Documents" from inside that prefix, not from the XDG
-// documents directory util.getVortexPath("documents") reports. util.getGameDocumentsPath
-// resolves the prefix from the discovered game path and falls back to Vortex's documents
+// documents directory util.getVortexPath("documents") reports. The core helper resolves
+// the prefix from the discovered game path and falls back to Vortex's documents
 // path on Windows or when the game isn't a Steam/Proton install (GOG, Epic, Heroic, ...).
 // (Named after the game on purpose: it appends the game folder, the core helper doesn't.)
 export function getWitcher3DocumentsPath(gamePath?: string) {
@@ -130,6 +131,49 @@ export const getDocumentsPath = (api: types.IExtensionApi) => {
     const discovery = context.api.getState().settings.gameMode.discovered[GAME_ID];
     util.opn(getWitcher3DocumentsPath(discovery?.path)).catch(() => null);
   };`,
+  },
+  {
+    file: 'iconbarActions.ts',
+    find: `import path from "path";
+
+import { actions, selectors, types, util } from "@nexusmods/vortex-api";`,
+    replace: `import { actions, selectors, types, util } from "@nexusmods/vortex-api";`,
+  },
+  {
+    // Profile load-order backup/restore moves mods.settings; it must look in the same place
+    // iniParser writes it. handleMergedScripts already has the discovered game path in props.
+    file: 'mergeBackup.ts',
+    find: '    const loarOrderFilepath: string = getLoadOrderFilePath();',
+    replace: '    const loarOrderFilepath: string = getLoadOrderFilePath(gamePath);',
+  },
+  {
+    // mergers.ts still called getDocumentsPath with the old (game) signature. Those merge
+    // handlers are not registered upstream today (registerMerge is commented out), but leave
+    // them correct rather than a landmine.
+    file: 'mergers.ts',
+    find: `import { GAME_ID, CONFIG_MATRIX_REL_PATH, CONFIG_MATRIX_FILES, VORTEX_BACKUP_TAG } from "./common";`,
+    replace: `import {
+  GAME_ID,
+  CONFIG_MATRIX_REL_PATH,
+  CONFIG_MATRIX_FILES,
+  VORTEX_BACKUP_TAG,
+  getWitcher3DocumentsPath,
+} from "./common";`,
+  },
+  {
+    file: 'mergers.ts',
+    find: `import { fileExists, getDocumentsPath, isSettingsFile, isXML } from "./util";`,
+    replace: `import { fileExists, isSettingsFile, isXML } from "./util";`,
+  },
+  {
+    file: 'mergers.ts',
+    find: `            in: path.join(getDocumentsPath(game), path.basename(file.relPath)),`,
+    replace: `            in: path.join(getWitcher3DocumentsPath(gameDiscovery?.path), path.basename(file.relPath)),`,
+  },
+  {
+    file: 'mergers.ts',
+    find: `  const gameSettingsFilepath = path.join(getDocumentsPath(discovery), path.basename(modFilePath));`,
+    replace: `  const gameSettingsFilepath = path.join(getWitcher3DocumentsPath(discovery.path), path.basename(modFilePath));`,
   },
 ];
 
