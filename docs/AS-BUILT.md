@@ -121,16 +121,18 @@ Converted consumers:
   extension-local wrapper is named `getWitcher3DocumentsPath` (it appends the game folder;
   the core helper returns the Documents root). After patching, the script scans the whole
   extension for a bare `getLoadOrderFilePath()` / `getWitcher3DocumentsPath()` call and fails
-  the build if an upstream bump adds one. Verified on a real Steam install (see below). Menu
-  mods deployed to `~/Documents` before the first fix are orphaned there and need removing
-  by hand.
+  the build if an upstream bump adds one. Real-install verification is recorded at the end
+  of this section. Menu mods deployed to `~/Documents` before the first fix are orphaned
+  there and need removing by hand.
 - **gamebryo-savegame-management** and **local-gamesettings** (`My Games`): converted by
-  the core patch. *Fixture-verified only* — no Bethesda game was available to test on; the
-  Windows code path is byte-for-byte upstream's.
+  the core patch. *Fixture-verified only* — no Bethesda game was available to test on.
+  Windows behaviour is unchanged: the helper delegates to `getVortexPath("documents")` off
+  Linux.
 - **gamebryo-plugin-management** (`plugins.txt`): also converted, but that extension is
   not built on Linux today — its `build` script is win32-gated because libloot has no Linux
   build (see the libloot notes below). The edit is carried so the fix is already in place if
-  that ever changes; the anchor check fails the build if upstream moves it.
+  that ever changes; the anchor check fails the build if upstream moves it. Its Windows code
+  path is byte-for-byte upstream's, behind an early return.
 
 Deferred, deliberately:
 
@@ -138,17 +140,20 @@ Deferred, deliberately:
   (`src/renderer/src/extensions/ini_prep/index.ts:58`), so ini tweaks are inert on Linux
   regardless of path. Lifting that gate is a separate change.
 - `open-directory` (cosmetic "open folder" buttons) and the per-game extensions that
-  hand-roll `getVortexPath("documents")` (sims3/4, teso, dragonage/2, bg3, divinity2, x4,
+  hand-roll `getVortexPath("documents")` (or `"localAppData"`, for bg3) (sims3/4, teso,
+  dragonage/2, bg3, divinity2, x4,
   torchlight2, battletech, nwn/2, galciv3, grimrock, dawnofman, modtype-dazip): one small
   edit each, to be done when someone can verify the game in question.
 
-Smoke (`qa/smoke.sh`) checks the helper's debug-log string in `app.asar`, the
-`getWitcher3DocumentsPath` name in the Witcher 3 bundle, and the `getGameDocumentsPath`
-call in the two gamebryo bundles that ship on Linux.
+Smoke (`qa/smoke.sh`) checks the helper's debug-log string in `app.asar` and the
+`util.getGameDocumentsPath` call in the Witcher 3 bundle and in the two gamebryo bundles
+that ship on Linux (a property access on the external vortex-api namespace, which the
+extension bundler never mangles).
 
-Real-install verification: _pending — to be filled in from the Task 6 run on the CachyOS
-host's Steam Witcher 3 (mods.settings written under the prefix, menu mod deployed there,
-toolbar button opens that folder)._
+Real-install verification: _pending — open item until run on the CachyOS host's Steam
+Witcher 3: toggle a mod and change a priority and confirm `mods.settings` is rewritten under
+the prefix (not `~/Documents`), deploy a menu mod there, and check the toolbar button opens
+that folder._
 
 ## Windows tools through Proton (2026-09-06)
 

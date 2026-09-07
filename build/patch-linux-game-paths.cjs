@@ -71,6 +71,7 @@ import local from "./local";`,
     find: `  getVortexPath,
   github,`,
     replace: `  getVortexPath,
+  // ${MARKER}
   getGameDocumentsPath,
   getGameLocalAppDataPath,
   getProtonUserDir,

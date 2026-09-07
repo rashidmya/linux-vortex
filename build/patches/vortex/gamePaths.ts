@@ -103,7 +103,7 @@ export function getProtonUserDir(gamePath?: string): string | undefined {
     const installDir = manifestInstallDir(path.join(install.steamApps, entry));
     // Keep scanning past a matching manifest with no prefix: a game can have several app ids
     // (base game / GOTY edition) and only the installed one has compatdata. Sorted order means
-    // the lowest app id wins if more than one has a prefix.
+    // the first manifest filename in sorted order wins if more than one has a prefix.
     if (installDir === undefined || installDir.toLowerCase() !== wanted) {
       continue;
     }
