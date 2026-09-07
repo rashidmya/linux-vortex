@@ -81,21 +81,74 @@ fails the build instead of silently dropping the fix. `qa/test-linux-ini.cjs` (8
 run in the build) exercises it through the real `IniParser`/`IniFile` API, including the
 Witcher 3 enable/disable sequence.
 
-## Witcher 3 Proton documents fix (2026-09-06)
+## Proton game paths (2026-09-07; supersedes the Witcher 3-only fix of 2026-09-06)
 
-The Witcher 3 has no native Linux build; it runs in a Steam Proton prefix and reads its
-`Documents` folder from *inside* that prefix. Upstream's extension uses
-`util.getVortexPath('documents')`, i.e. `~/Documents` on Linux, so `mods.settings` and the
-`witcher3menumoddocuments` mod type were written where the game never looks — mod priority
-and enable/disable flags had no in-game effect (mods still loaded, because deployment puts
-them in `<game>/Mods` and the game defaults to loading everything there).
+A game running under Steam Proton reads its per-user Windows folders from *inside* its
+compatdata prefix:
 
-`build/patch-witcher3-proton-docs.cjs` rewrites the extension's two documents-path helpers
-to resolve `<library>/steamapps/compatdata/<appid>/pfx/drive_c/users/<user>/Documents` from
-the discovered game path (app ids 292030 and 499450; `steamuser` then `$USER`), falling
-back to Vortex's documents path on Windows or when no prefix is found — so GOG/Epic/Heroic
-installs keep the old behaviour. Note that menu mods deployed to the old `~/Documents`
-location before this change are orphaned there and need removing by hand.
+```
+<library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/Documents
+<library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/AppData/Local
+```
+
+Upstream resolves both through `util.getVortexPath('documents' | 'localAppData')`, i.e. the
+host's `~/Documents` and a Windows-only `~/Local` on Linux, so anything Vortex writes there
+for the game lands where the game never looks. For The Witcher 3 that was `mods.settings`
+(mod priority and enable/disable had no in-game effect) and the `witcher3menumoddocuments`
+mod type; for the gamebryo games it is `plugins.txt` itself.
+
+`build/patch-linux-game-paths.cjs` installs `build/patches/vortex/gamePaths.ts` as
+`src/renderer/src/util/linux/gamePaths.ts` and exports it from `util/api.ts`, so extensions
+get `util.getGameDocumentsPath(gamePath)` / `util.getGameLocalAppDataPath(gamePath)` /
+`util.getProtonUserDir(gamePath)`. Resolution, all synchronous: not Linux or no path → host
+fallback; the path must be `<library>/steamapps/common/<dir>`; the app id is the
+`appmanifest_*.acf` whose `installdir` matches `<dir>` (case-insensitive — no per-game id
+lists; manifests are scanned in sorted order and the first with an existing prefix wins);
+`compatdata/<id>/pfx/drive_c/users/steamuser` must exist. Any miss falls back to
+`getVortexPath`, so GOG/Epic/Heroic installs, native Linux builds and Windows are unchanged,
+and a `debug`-level log line records the fallback for Steam-looking paths. The patch refuses
+to overwrite a file upstream might ship at that path (unless it is our own leftover from a
+previous build in the persistent volume), and fails the build on any anchor drift.
+`qa/test-game-paths.cjs` (14 cases, run in the build right after `pnpm install`, using
+upstream's TypeScript compiler) covers each branch against a fake Steam library.
+
+Converted consumers:
+
+- **The Witcher 3** (`build/patch-witcher3-proton-docs.cjs`): every documents-path site in
+  the extension — the load order file (`iniParser`, `index`, `mergeBackup`), the menu mod
+  deployment target, the settings mergers (`mergers.ts`, not registered upstream today) and
+  the "open documents folder" toolbar action, which the first fix had missed. The
+  extension-local wrapper is named `getWitcher3DocumentsPath` (it appends the game folder;
+  the core helper returns the Documents root). After patching, the script scans the whole
+  extension for a bare `getLoadOrderFilePath()` / `getWitcher3DocumentsPath()` call and fails
+  the build if an upstream bump adds one. Verified on a real Steam install (see below). Menu
+  mods deployed to `~/Documents` before the first fix are orphaned there and need removing
+  by hand.
+- **gamebryo-savegame-management** and **local-gamesettings** (`My Games`): converted by
+  the core patch. *Fixture-verified only* — no Bethesda game was available to test on; the
+  Windows code path is byte-for-byte upstream's.
+- **gamebryo-plugin-management** (`plugins.txt`): also converted, but that extension is
+  not built on Linux today — its `build` script is win32-gated because libloot has no Linux
+  build (see the libloot notes below). The edit is carried so the fix is already in place if
+  that ever changes; the anchor check fails the build if upstream moves it.
+
+Deferred, deliberately:
+
+- `ini_prep`: `genIniFormat('winapi')` returns `undefined` off Windows
+  (`src/renderer/src/extensions/ini_prep/index.ts:58`), so ini tweaks are inert on Linux
+  regardless of path. Lifting that gate is a separate change.
+- `open-directory` (cosmetic "open folder" buttons) and the per-game extensions that
+  hand-roll `getVortexPath("documents")` (sims3/4, teso, dragonage/2, bg3, divinity2, x4,
+  torchlight2, battletech, nwn/2, galciv3, grimrock, dawnofman, modtype-dazip): one small
+  edit each, to be done when someone can verify the game in question.
+
+Smoke (`qa/smoke.sh`) checks the helper's debug-log string in `app.asar`, the
+`getWitcher3DocumentsPath` name in the Witcher 3 bundle, and the `getGameDocumentsPath`
+call in the two gamebryo bundles that ship on Linux.
+
+Real-install verification: _pending — to be filled in from the Task 6 run on the CachyOS
+host's Steam Witcher 3 (mods.settings written under the prefix, menu mod deployed there,
+toolbar button opens that folder)._
 
 ## Windows tools through Proton (2026-09-06)
 
