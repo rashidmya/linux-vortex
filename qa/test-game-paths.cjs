@@ -101,6 +101,21 @@ mkdir(path.join(steamApps, 'appmanifest_100.acf'));
 const gogGame = path.join(tmpDir, 'gog', 'The Witcher 3');
 mkdir(gogGame);
 
+// Two manifests match the same installdir: appmanifest_1 has no prefix, appmanifest_2 does.
+// With sorted scanning, 1 is visited first and must be passed over for 2.
+mkdir(common('Dup'));
+manifest('1', 'Dup');
+manifest('2', 'Dup');
+mkdir(prefixUser('2'));
+
+// A library whose path segments aren't lowercase (Steam on a case-insensitive fs, or a
+// user-created library) must still be recognised.
+const steamApps2 = path.join(tmpDir, 'Library2', 'SteamApps');
+mkdir(path.join(steamApps2, 'Common', 'Some Game'));
+fs.writeFileSync(path.join(steamApps2, 'appmanifest_777.acf'),
+  '"AppState"\n{\n\t"appid"\t\t"777"\n\t"installdir"\t\t"Some Game"\n}\n');
+mkdir(path.join(steamApps2, 'compatdata', '777', 'pfx', 'drive_c', 'users', 'steamuser'));
+
 // --- tests -----------------------------------------------------------------------------
 let failed = 0;
 const tests = [];
@@ -172,6 +187,20 @@ test('a steamapps dir that cannot be listed falls back', () => {
   const result = withPlatform('linux', () =>
     getGameDocumentsPath(path.join(tmpDir, 'missing', 'steamapps', 'common', 'Game')));
   assert.strictEqual(result, path.join('/host', 'documents'));
+});
+
+test('steamapps/common segments are matched case-insensitively', () => {
+  const result = withPlatform('linux', () =>
+    getProtonUserDir(path.join(steamApps2, 'Common', 'Some Game')));
+  assert.strictEqual(
+    result,
+    path.join(steamApps2, 'compatdata', '777', 'pfx', 'drive_c', 'users', 'steamuser'),
+  );
+});
+
+test('a matching manifest without a prefix is passed over for one that has it', () => {
+  const result = withPlatform('linux', () => getProtonUserDir(common('Dup')));
+  assert.strictEqual(result, prefixUser('2'));
 });
 
 (async () => {

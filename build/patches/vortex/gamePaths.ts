@@ -79,6 +79,8 @@ export function getProtonUserDir(gamePath?: string): string | undefined {
   } catch (err) {
     return undefined;
   }
+  // readdir order is filesystem-dependent; sort so which manifest wins is predictable.
+  entries.sort();
   const wanted = install.installDir.toLowerCase();
   for (const entry of entries) {
     const match = /^appmanifest_(\d+)\.acf$/i.exec(entry);
