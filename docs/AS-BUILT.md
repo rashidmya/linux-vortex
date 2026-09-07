@@ -163,5 +163,11 @@ incomplete. Confirmed from `~/.config/Vortex/vortex.log` on CachyOS:
   response as of 2026-09-06. Further fixes are carried downstream, not reported upstream.
 - ~~Real-game acceptance pass.~~ Done: The Witcher 3 and RE Requiem verified on CachyOS.
 - ~~Decide distribution.~~ Done: pushing a `v*` tag publishes the AppImage to Releases.
-- On every `pinned-commit` bump, re-check the anchors in all three `build/patch-*.cjs`
-  scripts and the ini backend's sha256 guard. They hard-fail the build by design.
+- `.github/workflows/upstream-bump.yml` checks daily for a new upstream *release* and opens
+  a bump PR, building it in the same run and commenting the verdict. Bumps track the release
+  tag, not `master`, which has diverged from the release line.
+- A bump PR is never merged on green alone: the smoke gate is static, so the AppImage
+  artifact gets a host pass (launch, scripted FOMOD install, `nxm://`, deploy) first.
+- The anchors in all three `build/patch-*.cjs` scripts and the ini backend's sha256 guard
+  hard-fail the build by design. On a bump that means a red PR, which is the point - do not
+  loosen a guard to make one pass.

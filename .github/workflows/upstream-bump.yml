@@ -1,0 +1,156 @@
+name: Check for a new upstream Vortex release
+
+# Opens a PR when Nexus-Mods/Vortex publishes a release newer than pinned-commit.
+#
+# The build runs as a job of THIS workflow rather than as a check on the PR, because
+# GitHub suppresses workflow triggers for events authored by GITHUB_TOKEN (recursion
+# guard). A PR opened by the default token would never trigger build.yml. Building in
+# the same run avoids needing a PAT. Commits a human later pushes to the branch do
+# trigger build.yml normally.
+on:
+  schedule:
+    - cron: '17 6 * * *'   # daily, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    outputs:
+      needed: ${{ steps.check.outputs.needed }}
+      tag: ${{ steps.check.outputs.tag }}
+      sha: ${{ steps.check.outputs.sha }}
+      old: ${{ steps.check.outputs.old }}
+      branch: ${{ steps.check.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # /releases/latest already excludes drafts and prereleases, so beta tags are
+          # never picked up. Resolve via /commits/<tag>, which handles both lightweight
+          # and annotated tags in one call.
+          TAG="$(gh api repos/Nexus-Mods/Vortex/releases/latest --jq .tag_name)"
+          SHA="$(gh api "repos/Nexus-Mods/Vortex/commits/$TAG" --jq .sha)"
+          OLD="$(tr -d '[:space:]' < pinned-commit)"
+          BRANCH="chore/bump-vortex-$TAG"
+          {
+            echo "tag=$TAG"
+            echo "sha=$SHA"
+            echo "old=$OLD"
+            echo "branch=$BRANCH"
+          } >> "$GITHUB_OUTPUT"
+          echo "upstream latest: $TAG ($SHA)"
+          echo "currently pinned: $OLD"
+
+          if [ "$SHA" = "$OLD" ]; then
+            echo "Already on $TAG - nothing to do."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists - a bump is already in flight."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number -q '.[0].number')" ]; then
+            echo "An open PR for $BRANCH already exists."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+
+  open-pr:
+    needs: detect
+    if: needs.detect.outputs.needed == 'true'
+    runs-on: ubuntu-24.04
+    outputs:
+      pr: ${{ steps.pr.outputs.pr }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the new pin and push the branch
+        env:
+          TAG: ${{ needs.detect.outputs.tag }}
+          SHA: ${{ needs.detect.outputs.sha }}
+          BRANCH: ${{ needs.detect.outputs.branch }}
+        run: |
+          set -euo pipefail
+          echo "$SHA" > pinned-commit
+          echo "$TAG" > pinned-version
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add pinned-commit pinned-version
+          git commit -m "chore: bump upstream Vortex to $TAG"
+          git push -u origin "$BRANCH"
+
+      - name: Open the PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.detect.outputs.tag }}
+          SHA: ${{ needs.detect.outputs.sha }}
+          OLD: ${{ needs.detect.outputs.old }}
+          BRANCH: ${{ needs.detect.outputs.branch }}
+        run: |
+          set -euo pipefail
+          BODY="Upstream published \`$TAG\`.
+
+          - Pin: \`$OLD\` -> \`$SHA\`
+          - Upstream changes: https://github.com/Nexus-Mods/Vortex/compare/$OLD...$TAG
+          - Upstream release notes: https://github.com/Nexus-Mods/Vortex/releases/tag/$TAG
+
+          The build for this bump runs as a job of the workflow that opened this PR; a
+          comment below reports the verdict and links the run holding the AppImage artifact.
+
+          **Do not merge on green alone.** The smoke gate is static and cannot tell us
+          Vortex still boots. Download the artifact, \`chmod +x\`, and do the host pass:
+          launch, a scripted FOMOD install, \`nxm://\` one-click, a download + hardlink
+          deploy, and a Witcher 3 load-order write.
+
+          If the build fails on a patch anchor or the ini sha256 guard, that is the guard
+          working. Re-review upstream and update the patch deliberately - do not loosen it."
+          URL="$(gh pr create --repo "$GITHUB_REPOSITORY" --base master --head "$BRANCH" \
+            --title "chore: bump upstream Vortex to $TAG" \
+            --label enhancement \
+            --body "$BODY")"
+          echo "$URL"
+          echo "pr=${URL##*/}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [detect, open-pr]
+    if: needs.detect.outputs.needed == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.detect.outputs.branch }}
+
+  comment:
+    needs: [detect, open-pr, build]
+    if: always() && needs.open-pr.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.open-pr.outputs.pr }}
+          RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "$RESULT" = "success" ]; then
+            BODY="CI build and the 18-check smoke gate passed.
+
+          Download the AppImage from the Artifacts section of $RUN, \`chmod +x\` it (the
+          artifact zip strips the executable bit), and do the host pass before merging."
+          else
+            BODY="CI build did not pass (result: \`$RESULT\`). Do not merge.
+
+          Run: $RUN"
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$BODY"
