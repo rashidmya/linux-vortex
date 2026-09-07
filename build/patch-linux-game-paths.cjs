@@ -12,8 +12,10 @@
  *    util.getGameDocumentsPath(gamePath) / util.getGameLocalAppDataPath(gamePath).
  *    Verified by qa/test-game-paths.cjs.
  * 2. Converts the shared gamebryo modules that already know the game's discovered path:
- *    gamebryo-plugin-management (plugins.txt), gamebryo-savegame-management and
- *    local-gamesettings ("My Games"). Windows keeps upstream's code path byte-for-byte.
+ *    gamebryo-savegame-management and local-gamesettings ("My Games"), and
+ *    gamebryo-plugin-management (plugins.txt) - the latter is not built on Linux today
+ *    (libloot has no Linux build, see docs/AS-BUILT.md), so that edit is carried so the fix
+ *    is already in place if it ever is. Windows keeps upstream's code path byte-for-byte.
  *
  * The Witcher 3 extension is converted separately by build/patch-witcher3-proton-docs.cjs,
  * which depends on the export this script adds - run this one first.
@@ -57,12 +59,12 @@ export function mygamesPath(gameMode: string): string {
 const EDITS = [
   {
     file: API,
-    find: `import getVortexPath from "./getVortexPath";
-import github from "./github";`,
-    replace: `import getVortexPath from "./getVortexPath";
+    find: `import lazyRequire from "./lazyRequire";
+import local from "./local";`,
+    replace: `import lazyRequire from "./lazyRequire";
 // ${MARKER}
 import { getGameDocumentsPath, getGameLocalAppDataPath, getProtonUserDir } from "./linux/gamePaths";
-import github from "./github";`,
+import local from "./local";`,
   },
   {
     file: API,
@@ -112,6 +114,10 @@ for (const rel of [API, PLUGIN_MGMT, SAVEGAMES, LOCAL_SETTINGS]) {
     process.exit(1);
   }
 }
+if (!fs.existsSync(HELPER_SRC)) {
+  console.error('!! helper source not found: ' + HELPER_SRC);
+  process.exit(1);
+}
 
 const contents = new Map();
 const readFile = (rel) => {
@@ -147,6 +153,10 @@ if (failures > 0) {
 }
 
 const dest = path.join(srcRoot, HELPER_DEST);
+if (fs.existsSync(dest)) {
+  console.error('!! upstream now ships ' + HELPER_DEST + '; re-review before overwriting it.');
+  process.exit(1);
+}
 fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.copyFileSync(HELPER_SRC, dest);
 console.log('   installed: ' + HELPER_DEST);

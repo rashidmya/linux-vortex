@@ -56,7 +56,7 @@ function manifestInstallDir(manifestPath: string): string | undefined {
   try {
     const match = /"installdir"\s+"([^"]*)"/i.exec(fs.readFileSync(manifestPath, "utf8"));
     return match?.[1];
-  } catch (err) {
+  } catch {
     // unreadable or malformed manifest - not ours to fix, skip it
     return undefined;
   }
@@ -65,7 +65,7 @@ function manifestInstallDir(manifestPath: string): string | undefined {
 function isDirectory(dirPath: string): boolean {
   try {
     return fs.statSync(dirPath).isDirectory();
-  } catch (err) {
+  } catch {
     return false;
   }
 }
