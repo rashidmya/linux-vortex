@@ -3,16 +3,16 @@
  * patch-witcher3-proton-docs.cjs — point the Witcher 3 extension at the Proton prefix.
  *
  * The Witcher 3 has no native Linux build; it runs through a Steam Proton (Wine) prefix
- * and reads its "Documents" folder from inside that prefix:
- *   <library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/Documents/The Witcher 3
- * Upstream's extension uses util.getVortexPath('documents'), which on Linux is the XDG
- * documents dir (~/Documents). So the load order file (mods.settings) and menu mods are
- * written where the game will never look for them: mod priorities and enable/disable flags
- * have no effect in game, and menu mods do nothing.
+ * and reads its "Documents" folder from inside that prefix. Upstream's extension uses
+ * util.getVortexPath('documents'), which on Linux is the XDG documents dir (~/Documents).
+ * So the load order file (mods.settings) and menu mods are written where the game will
+ * never look for them: mod priorities and enable/disable flags have no effect in game, and
+ * menu mods do nothing.
  *
- * This rewrites the extension's two documents-path helpers to resolve the prefix from the
- * discovered game path, falling back to Vortex's documents path on Windows or when no
- * prefix is found (GOG/Epic/Heroic layouts keep the old behaviour).
+ * The prefix itself is resolved by util.getGameDocumentsPath(gamePath), installed into
+ * Vortex core by build/patch-linux-game-paths.cjs (run that first). This script threads
+ * the discovered game path to the extension's three documents-path sites: the load order
+ * file, the menu mod deployment target, and the "open documents folder" toolbar action.
  *
  * Usage: node build/patch-witcher3-proton-docs.cjs <upstream Vortex source root>
  * Idempotent; fails the build if any anchor is missing, so an upstream change to these
@@ -33,53 +33,16 @@ const EDITS = [
 }`,
     replace: `// ${MARKER}: The Witcher 3 has no native Linux build - it runs in a Steam
 // Proton (Wine) prefix and reads "Documents" from inside that prefix, not from the XDG
-// documents directory util.getVortexPath("documents") reports. Writing mods.settings to
-// ~/Documents means the game never sees the load order. Resolve the prefix from the
-// discovered game path; fall back to Vortex's documents path on Windows, or when the game
-// isn't a Steam/Proton install (GOG, Epic, Heroic, ...).
-const STEAM_APP_IDS = ["292030", "499450"];
-
-export function getGameDocumentsRoot(gamePath?: string) {
-  const fallback = util.getVortexPath("documents");
-  if (process.platform !== "linux" || !gamePath) {
-    return fallback;
-  }
-  // <library>/steamapps/common/The Witcher 3 -> <library>/steamapps
-  const steamApps = path.resolve(gamePath, "..", "..");
-  const users = ["steamuser"];
-  if (process.env.USER) {
-    users.push(process.env.USER);
-  }
-  for (const appId of STEAM_APP_IDS) {
-    for (const user of users) {
-      const documents = path.join(
-        steamApps,
-        "compatdata",
-        appId,
-        "pfx",
-        "drive_c",
-        "users",
-        user,
-        "Documents",
-      );
-      try {
-        if (fs.statSync(documents).isDirectory()) {
-          return documents;
-        }
-      } catch (err) {
-        // no prefix at this candidate, try the next one
-      }
-    }
-  }
-  return fallback;
-}
-
-export function getGameDocumentsPath(gamePath?: string) {
-  return path.join(getGameDocumentsRoot(gamePath), "The Witcher 3");
+// documents directory util.getVortexPath("documents") reports. util.getGameDocumentsPath
+// resolves the prefix from the discovered game path and falls back to Vortex's documents
+// path on Windows or when the game isn't a Steam/Proton install (GOG, Epic, Heroic, ...).
+// (Named after the game on purpose: it appends the game folder, the core helper doesn't.)
+export function getWitcher3DocumentsPath(gamePath?: string) {
+  return path.join(util.getGameDocumentsPath(gamePath), "The Witcher 3");
 }
 
 export function getLoadOrderFilePath(gamePath?: string) {
-  return path.join(getGameDocumentsPath(gamePath), LOAD_ORDER_FILENAME);
+  return path.join(getWitcher3DocumentsPath(gamePath), LOAD_ORDER_FILENAME);
 }`,
   },
   {
@@ -97,7 +60,7 @@ export function getLoadOrderFilePath(gamePath?: string) {
   I18N_NAMESPACE,
   ACTIVITY_ID_IMPORTING_LOADORDER,
   PART_SUFFIX,
-  getGameDocumentsPath,
+  getWitcher3DocumentsPath,
 } from "./common";`,
   },
   {
@@ -112,7 +75,7 @@ export const getDocumentsPath = (api: types.IExtensionApi) => {
   return (game: types.IGame) => {
     const state = api.store.getState();
     const discovery = state.settings.gameMode.discovered[game.id];
-    return getGameDocumentsPath(discovery?.path);
+    return getWitcher3DocumentsPath(discovery?.path);
   };
 };`,
   },
@@ -150,6 +113,23 @@ export const getDocumentsPath = (api: types.IExtensionApi) => {
     getDocumentsPath,`,
     replace: `    isTW3(context.api),
     getDocumentsPath(context.api),`,
+  },
+  {
+    file: 'iconbarActions.ts',
+    find: `import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX } from "./common";`,
+    replace: `import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX, getWitcher3DocumentsPath } from "./common";`,
+  },
+  {
+    file: 'iconbarActions.ts',
+    find: `  const openTW3DocPath = () => {
+    const docPath = path.join(util.getVortexPath("documents"), "The Witcher 3");
+    util.opn(docPath).catch(() => null);
+  };`,
+    replace: `  const openTW3DocPath = () => {
+    // ${MARKER}: the folder lives inside the Proton prefix on Linux.
+    const discovery = context.api.getState().settings.gameMode.discovered[GAME_ID];
+    util.opn(getWitcher3DocumentsPath(discovery?.path)).catch(() => null);
+  };`,
   },
 ];
 
