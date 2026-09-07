@@ -93,6 +93,16 @@ else
   no "Proton routing matches on working directory"
 fi
 
+# W3 Script Merger is configured with Windows paths, not POSIX ones
+# (build/patch-witcher3-scriptmerger-paths.cjs). Handed a POSIX path the merger doesn't
+# fail, it merges to a junk folder the game never reads - so this runs the real
+# setMergerConfig lifted out of the packaged extension rather than grepping for "Z:".
+if node "$REPO_ROOT/qa/test-scriptmerger-paths.cjs" "$W3" >/dev/null 2>&1; then
+  ok "script merger configured with Proton (Z:) paths"
+else
+  no "script merger configured with Proton (Z:) paths"
+fi
+
 echo "----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
