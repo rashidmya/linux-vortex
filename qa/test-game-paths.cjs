@@ -61,6 +61,9 @@ function loadHelper(file) {
     if (id === '../getVortexPath') {
       return { __esModule: true, default: getVortexPathStub };
     }
+    if (id === '../log') {
+      return { __esModule: true, log: () => undefined };
+    }
     return require(id);
   };
   mod._compile(outputText, file);
@@ -77,22 +80,22 @@ const common = (dir) => path.join(steamApps, 'common', dir);
 const prefixUser = (appId) =>
   path.join(steamApps, 'compatdata', appId, 'pfx', 'drive_c', 'users', 'steamuser');
 const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
-const manifest = (appId, installdir) =>
+const manifest = (dir, appId, installdir) =>
   fs.writeFileSync(
-    path.join(steamApps, 'appmanifest_' + appId + '.acf'),
+    path.join(dir, 'appmanifest_' + appId + '.acf'),
     '"AppState"\n{\n\t"appid"\t\t"' + appId + '"\n\t"installdir"\t\t"' + installdir + '"\n}\n',
   );
 
 mkdir(common('The Witcher 3'));
-manifest('292030', 'The Witcher 3');
+manifest(steamApps, '292030', 'The Witcher 3');
 mkdir(path.join(prefixUser('292030'), 'Documents'));
 
 mkdir(common('The Witcher 3 GOTY'));
-manifest('499450', 'The Witcher 3 GOTY');
+manifest(steamApps, '499450', 'The Witcher 3 GOTY');
 mkdir(prefixUser('499450'));
 
 mkdir(common('Team Fortress 2'));
-manifest('440', 'Team Fortress 2'); // native Linux game: no compatdata
+manifest(steamApps, '440', 'Team Fortress 2'); // native Linux game: no compatdata
 
 // A manifest that cannot be read as a file (it is a directory). Sorts before the others so
 // the scan hits it first and must skip it rather than throw.
@@ -104,16 +107,15 @@ mkdir(gogGame);
 // Two manifests match the same installdir: appmanifest_1 has no prefix, appmanifest_2 does.
 // With sorted scanning, 1 is visited first and must be passed over for 2.
 mkdir(common('Dup'));
-manifest('1', 'Dup');
-manifest('2', 'Dup');
+manifest(steamApps, '1', 'Dup');
+manifest(steamApps, '2', 'Dup');
 mkdir(prefixUser('2'));
 
 // A library whose path segments aren't lowercase (Steam on a case-insensitive fs, or a
 // user-created library) must still be recognised.
 const steamApps2 = path.join(tmpDir, 'Library2', 'SteamApps');
 mkdir(path.join(steamApps2, 'Common', 'Some Game'));
-fs.writeFileSync(path.join(steamApps2, 'appmanifest_777.acf'),
-  '"AppState"\n{\n\t"appid"\t\t"777"\n\t"installdir"\t\t"Some Game"\n}\n');
+manifest(steamApps2, '777', 'Some Game');
 mkdir(path.join(steamApps2, 'compatdata', '777', 'pfx', 'drive_c', 'users', 'steamuser'));
 
 // --- tests -----------------------------------------------------------------------------
@@ -201,6 +203,18 @@ test('steamapps/common segments are matched case-insensitively', () => {
 test('a matching manifest without a prefix is passed over for one that has it', () => {
   const result = withPlatform('linux', () => getProtonUserDir(common('Dup')));
   assert.strictEqual(result, prefixUser('2'));
+});
+
+test('a resolved prefix never consults the host fallback', () => {
+  hostLookups.length = 0;
+  const result = withPlatform('linux', () => getGameDocumentsPath(common('The Witcher 3')));
+  assert.strictEqual(result, path.join(prefixUser('292030'), 'Documents'));
+  assert.deepStrictEqual(hostLookups, []);
+});
+
+test('Documents is returned even when the game has not created it yet', () => {
+  const result = withPlatform('linux', () => getGameDocumentsPath(common('The Witcher 3 GOTY')));
+  assert.strictEqual(result, path.join(prefixUser('499450'), 'Documents'));
 });
 
 (async () => {
