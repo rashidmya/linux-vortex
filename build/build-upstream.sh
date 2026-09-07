@@ -39,19 +39,25 @@ git -C "$SRC" fetch --depth 1 origin "$PINNED"
 git -C "$SRC" checkout -f -q "$PINNED"
 git -C "$SRC" submodule update --init --recursive --depth 1
 
-# 1b. Downstream Linux source fix: the Witcher 3 extension writes its load order file and
-#     deploys menu mods to the XDG documents dir, but the game runs under Proton and reads
-#     Documents from inside its compatibility prefix. See docs/AS-BUILT.md.
+# 1b. Downstream Linux source fix: games running under Proton read "Documents" and
+#     "%LOCALAPPDATA%" from inside their compatdata prefix, not from the host's XDG dirs
+#     util.getVortexPath() reports. Install a helper that resolves the prefix from the
+#     discovered game path and convert the shared gamebryo modules. See docs/AS-BUILT.md.
+echo ">> Patching core (Proton game paths helper + gamebryo modules) ..."
+node "$REPO_ROOT/build/patch-linux-game-paths.cjs" "$SRC"
+
+# 1c. The Witcher 3 extension's load order file, menu mods and "open documents" action, on
+#     the helper from 1b (must run after it). See docs/AS-BUILT.md.
 echo ">> Patching witcher3 extension (Proton documents path) ..."
 node "$REPO_ROOT/build/patch-witcher3-proton-docs.cjs" "$SRC"
 
-# 1c. Downstream Linux source fix: api.runExecutable spawns Windows executables directly,
+# 1d. Downstream Linux source fix: api.runExecutable spawns Windows executables directly,
 #     which fails on Linux (EACCES, reported as a bogus firewall error). Route them through
 #     Proton the way StarterInfo already does. See docs/AS-BUILT.md.
 echo ">> Patching core (run Windows tools through Proton) ..."
 node "$REPO_ROOT/build/patch-linux-proton-tools.cjs" "$SRC"
 
-# 1d. Downstream Linux source fix: Vortex writes the W3 Script Merger's config for the user
+# 1e. Downstream Linux source fix: Vortex writes the W3 Script Merger's config for the user
 #     with POSIX paths, but the merger is a Windows .NET tool running in the game's Proton
 #     prefix. It does not reject them - it silently merges to a junk path, so merges appear
 #     to work and do nothing. See docs/AS-BUILT.md.
@@ -68,6 +74,12 @@ node "$REPO_ROOT/build/patch-witcher3-scriptmerger-paths.cjs" "$SRC"
 cd "$SRC"
 echo ">> pnpm install ..."
 corepack pnpm install --frozen-lockfile
+
+# The helper is plain TypeScript; verify it with the compiler pnpm just installed, before
+# spending an hour on the full build.
+echo ">> Verifying the Proton game paths helper ..."
+node "$REPO_ROOT/qa/test-game-paths.cjs" "$REPO_ROOT/build/patches/vortex/gamePaths.ts" \
+  --typescript "$SRC/node_modules/typescript"
 
 export NODE_ENV=production
 echo ">> nx build (serial, no lint/typecheck) ..."

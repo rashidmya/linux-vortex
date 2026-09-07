@@ -69,11 +69,23 @@ ASAR="$APPDIR/resources/app.asar"
 grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
   && ok "Linux ini backend present in app.asar" || no "Linux ini backend present in app.asar"
 
-# Witcher 3 extension resolves its documents folder inside the Proton prefix
-# (build/patch-witcher3-proton-docs.cjs).
+# Proton game paths helper (build/patch-linux-game-paths.cjs): present in core (checked by
+# its debug-log string, which survives minification), and the converted extensions call it
+# (property names survive the extension bundler).
+grep -aq 'no Proton prefix found for game' "$ASAR" 2>/dev/null \
+  && ok "Proton game paths helper present in app.asar" || no "Proton game paths helper present in app.asar"
 W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
-grep -aq 'compatdata' "$W3" 2>/dev/null \
-  && ok "witcher3 extension is Proton-prefix aware" || no "witcher3 extension is Proton-prefix aware"
+grep -aq 'getGameDocumentsPath' "$W3" 2>/dev/null \
+  && ok "witcher3 extension resolves documents through the helper" \
+  || no "witcher3 extension resolves documents through the helper"
+# gamebryo-plugin-management is not built on Linux (win32-gated build script; no libloot),
+# so check the two converted extensions that do ship.
+for EXT in gamebryo-savegame-management local-gamesettings; do
+  BUNDLE="$APPDIR/resources/app.asar.unpacked/bundledPlugins/$EXT/index.cjs"
+  grep -aq 'getGameDocumentsPath' "$BUNDLE" 2>/dev/null \
+    && ok "$EXT resolves My Games through the helper" \
+    || no "$EXT resolves My Games through the helper"
+done
 
 # Windows tools launched by extensions are routed through Proton
 # (build/patch-linux-proton-tools.cjs).
