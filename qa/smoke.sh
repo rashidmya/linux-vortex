@@ -71,12 +71,14 @@ grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
 
 # Proton game paths helper (build/patch-linux-game-paths.cjs): present in core (checked by
 # its debug-log string, which survives minification), and the converted extensions call it
-# (property names survive the extension bundler).
+# through the external vortex-api namespace - a property access, which the extension
+# bundler never mangles.
 grep -aq 'no Proton prefix found for game' "$ASAR" 2>/dev/null \
   && ok "Proton game paths helper present in app.asar" || no "Proton game paths helper present in app.asar"
 W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
-# getWitcher3DocumentsPath only exists in the rewritten patch; the older one also had a getGameDocumentsPath.
-grep -aq 'getWitcher3DocumentsPath' "$W3" 2>/dev/null \
+# The older witcher3-only patch also had a getGameDocumentsPath *definition*; only the
+# rewritten one *calls* util.getGameDocumentsPath, so match the call.
+grep -aq 'util.getGameDocumentsPath(' "$W3" 2>/dev/null \
   && ok "witcher3 extension resolves documents through the helper" \
   || no "witcher3 extension resolves documents through the helper"
 # gamebryo-plugin-management is not built on Linux (win32-gated build script; no libloot),
