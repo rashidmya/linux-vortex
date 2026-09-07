@@ -7,7 +7,8 @@ file is the source of truth for the *built* result.
 ## Deliverable
 
 - **`out/linux-vortex-<date>-g<shortSHA>-x86_64.AppImage`** (~219 MB), built from
-  upstream `Nexus-Mods/Vortex` @ `4c39bbf` (pinned in `pinned-commit`).
+  upstream `Nexus-Mods/Vortex` at the commit in `pinned-commit`, which is the release
+  tag recorded in `pinned-version`.
 - Build it: `ENGINE=docker ./build-all.sh`
 - Run it: `./out/linux-vortex-*-x86_64.AppImage --appimage-extract-and-run`
 

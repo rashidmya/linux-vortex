@@ -23,22 +23,27 @@ mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 cp -a "$APP/." "$APPDIR/"
 
 # --- FOMOD native backend fix ---
-# Upstream ships the FOMOD .node with an absolute build-tree RUNPATH and omits its
-# companion ModInstaller.Native.so from the package, so scripted FOMOD installs break.
-# Co-locate the .so next to the .node and rewrite the RUNPATH to $ORIGIN -> portable.
-FOMOD_NODE="$(find "$APPDIR" -name 'fomod-installer-native.node' 2>/dev/null | head -1 || true)"
-if [ -n "$FOMOD_NODE" ]; then
-  FOMOD_SO="$(find "$BUILD_HOME/upstream" -path '*fomod-installer-native*' -name 'ModInstaller.Native.so' 2>/dev/null | head -1 || true)"
-  if [ -n "$FOMOD_SO" ]; then
-    cp -a "$FOMOD_SO" "$(dirname "$FOMOD_NODE")/"
-    patchelf --set-rpath '$ORIGIN' "$FOMOD_NODE"
-    echo ">> FOMOD: co-located $(basename "$FOMOD_SO") + set RUNPATH=\$ORIGIN on $(basename "$FOMOD_NODE")"
-  else
-    echo "!! FOMOD: ModInstaller.Native.so not found in build tree; scripted installs may not work." >&2
-  fi
-else
-  echo "!! FOMOD: fomod-installer-native.node not found in AppDir; skipping FOMOD fix." >&2
-fi
+# The FOMOD .node is linked against ModInstaller.Native.so by SONAME with an absolute
+# build-tree RUNPATH, so on a user's machine it cannot find the library sitting next to
+# it. Which copy gets loaded is decided by node-gyp-build, which tries build/Release/
+# before prebuilds/ (node-gyp-build.js), and upstream repackages this module between
+# releases - v2.6.3 dropped the bin/<platform>-<abi>/ copy that the previous
+# filename-based lookup here relied on, which silently skipped the whole fix. So locate
+# the package and repair EVERY .node it ships: co-locate the .so, set RUNPATH=$ORIGIN.
+# Anything missing is a hard failure; a silently skipped fix ships a broken FOMOD.
+FOMOD_PKG="$(find "$APPDIR" -type d -path '*@nexusmods/fomod-installer-native' 2>/dev/null | head -1 || true)"
+[ -n "$FOMOD_PKG" ] || { echo "!! FOMOD: @nexusmods/fomod-installer-native not found in AppDir" >&2; exit 1; }
+FOMOD_SO="$(find "$FOMOD_PKG" "$BUILD_HOME/upstream" -name 'ModInstaller.Native.so' 2>/dev/null | head -1 || true)"
+[ -n "$FOMOD_SO" ] || { echo "!! FOMOD: ModInstaller.Native.so not found in the package or build tree" >&2; exit 1; }
+FOMOD_COUNT=0
+while IFS= read -r fomod_node; do
+  [ -n "$fomod_node" ] || continue
+  [ -f "$(dirname "$fomod_node")/ModInstaller.Native.so" ] || cp -a "$FOMOD_SO" "$(dirname "$fomod_node")/"
+  patchelf --set-rpath '$ORIGIN' "$fomod_node"
+  FOMOD_COUNT=$((FOMOD_COUNT + 1))
+done < <(find "$FOMOD_PKG" -name '*.node' 2>/dev/null)
+[ "$FOMOD_COUNT" -gt 0 ] || { echo "!! FOMOD: no .node files found under $FOMOD_PKG" >&2; exit 1; }
+echo ">> FOMOD: co-located ModInstaller.Native.so + set RUNPATH=\$ORIGIN on $FOMOD_COUNT .node file(s)"
 # --- end FOMOD fix ---
 
 # --- .NET runtime + dotnetprobe ---
