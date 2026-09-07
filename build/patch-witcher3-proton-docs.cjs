@@ -85,9 +85,9 @@ export const getDocumentsPath = (api: types.IExtensionApi) => {
     find: `  public async getIniStructure() {
     return this.mIniStruct;
   }`,
-    replace: `  // ${MARKER}: the load order file lives in the game's documents folder, which is
-  // inside the Proton prefix on Linux, so its location depends on where the game is.
-  private gamePath(): string {
+    replace: `  // ${MARKER}: the load order file lives in the game's documents folder,
+  // which is inside the Proton prefix on Linux, so its location depends on where the game is.
+  private gamePath(): string | undefined {
     const state = this.mApi.getState();
     return util.getSafe(state, ["settings", "gameMode", "discovered", GAME_ID, "path"], undefined);
   }
@@ -168,12 +168,18 @@ import { actions, selectors, types, util } from "@nexusmods/vortex-api";`,
   {
     file: 'mergers.ts',
     find: `            in: path.join(getDocumentsPath(game), path.basename(file.relPath)),`,
-    replace: `            in: path.join(getWitcher3DocumentsPath(gameDiscovery?.path), path.basename(file.relPath)),`,
+    replace: `            in: path.join(
+              getWitcher3DocumentsPath(gameDiscovery?.path),
+              path.basename(file.relPath),
+            ),`,
   },
   {
     file: 'mergers.ts',
     find: `  const gameSettingsFilepath = path.join(getDocumentsPath(discovery), path.basename(modFilePath));`,
-    replace: `  const gameSettingsFilepath = path.join(getWitcher3DocumentsPath(discovery.path), path.basename(modFilePath));`,
+    replace: `  const gameSettingsFilepath = path.join(
+    getWitcher3DocumentsPath(discovery.path),
+    path.basename(modFilePath),
+  );`,
   },
 ];
 
@@ -206,7 +212,10 @@ let failures = 0;
 for (const edit of EDITS) {
   const text = readFile(edit.file);
   const occurrences = text.split(edit.find).length - 1;
-  const wanted = edit.all ? (edit.expect || occurrences) : 1;
+  if (edit.all && edit.expect === undefined) {
+    throw new Error(edit.file + ': replace-all edits must declare an expected count');
+  }
+  const wanted = edit.all ? edit.expect : 1;
   if (occurrences !== wanted) {
     console.error('!! ' + edit.file + ': expected ' + wanted + ' occurrence(s) of the anchor, found ' +
       occurrences);
@@ -228,4 +237,25 @@ for (const [name, text] of contents) {
   fs.writeFileSync(path.join(extDir, name), text);
   console.log('   patched: ' + path.join(EXT_REL, name));
 }
+
+// The anchors above only guard the sites we edit. A new bare call added anywhere else in the
+// extension by an upstream bump would silently fall back to the host documents dir, so scan
+// the whole tree for one and fail the build if found.
+// (Runs after the writes on purpose: the tree is left patched so the offending file is easy to inspect.)
+const bareCalls = [];
+for (const rel of fs.readdirSync(extDir, { recursive: true })) {
+  if (!/\.tsx?$/.test(rel)) {
+    continue;
+  }
+  const text = fs.readFileSync(path.join(extDir, rel), 'utf8');
+  if (/\bgetLoadOrderFilePath\(\s*\)/.test(text) || /\bgetWitcher3DocumentsPath\(\s*\)/.test(text)) {
+    bareCalls.push(rel);
+  }
+}
+if (bareCalls.length > 0) {
+  console.error('!! ' + EXT_REL + ': documents-path helper called without a game path in: ' +
+    bareCalls.join(', ') + '. Thread the discovered game path through (see this script).');
+  process.exit(1);
+}
+
 console.log('>> witcher3 proton documents: patched ' + contents.size + ' file(s)');
