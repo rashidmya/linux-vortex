@@ -126,6 +126,51 @@ Verified by hand before building: `STEAM_COMPAT_DATA_PATH=… STEAM_COMPAT_CLIEN
 so the .NET tool runs). The wine-based `extras/patch-re-fluffy.cjs` workaround is superseded
 by this for Steam/Proton games, though it remains valid for non-Steam installs.
 
+## Witcher 3 Script Merger paths (2026-09-07)
+
+Vortex sets the merger up for the user: `setMergerConfig()` (`scriptmerger.ts`) rewrites
+`GameDirectory`, `VanillaScriptsDirectory` and `ModsDirectory` inside
+`WitcherScriptMerger.exe.config`, building them with node's `path.join`. On Linux that
+writes POSIX paths — but Script Merger is a Windows .NET tool running in the game's Proton
+prefix, where the files it enumerates come back as `Z:\home\...`.
+
+The merger does not reject the mismatch. It resolves a file's location inside its mod with
+
+```csharp
+var startIndex = fullPath.IndexOfIgnoreCase(basePath) + basePath.Length + 1;
+return fullPath.Substring(startIndex);          // Paths.GetRelativePath
+```
+
+`IndexOfIgnoreCase` is separator- and drive-sensitive, so it misses, returns `-1`, and the
+helper strips `basePath.Length` characters instead of erroring. That garbage relative path
+goes straight into `_outputPath = Path.Combine(ModsDirectory, mergedModName, relPath)`
+(`FileMerger.cs`), so the merge is written where the game never reads. Observed on a real
+install: merging *Fast Travel from Anywhere* with *MapQuestObjectives* (both patch
+`mapMenu.ws`) produced
+`Mods/mod0000_MergedFiles/ywhere/content/scripts/game/gui/menus/mapMenu.ws` — `ywhere`
+being the tail of `modFastTravelFromAnywhere`. The game only loads
+`mod0000_MergedFiles/content/scripts/...`, so the script conflict the merge was meant to
+resolve persisted, `MergeInventory.xml` was left empty (blank Merges panel), and Vortex
+logged `[game-witcher] failed to retrieve merged mod names`. Merging appeared to succeed
+and did nothing.
+
+`build/patch-witcher3-scriptmerger-paths.cjs` converts those three values on Linux: Wine
+maps the `Z:` drive to `/`, so an absolute POSIX path becomes a valid Windows path by
+prefixing `Z:` and flipping the separators. Naming the drive explicitly matters — Proton
+also maps the Steam library to `S:`, and a bare `/home/...` resolves against the process's
+*current* drive, so once that mapping appears the merger can stop finding the game at all.
+The mods directory also moves from `mods` to `Mods`: the casing this extension creates and
+reads everywhere else, and the only one that exists on a case-sensitive filesystem.
+
+Verified on the CachyOS host both ways. With the POSIX config the merge landed under
+`ywhere/`; with `Z:\...\Mods` it landed at
+`Mods/mod0000_MergedFiles/content/scripts/game/gui/menus/mapMenu.ws`, carrying 14 lines
+unique to one mod and 13 unique to the other, and `MergeInventory.xml` recorded the merge
+with both `IncludedMod` entries. `qa/test-scriptmerger-paths.cjs` lifts the real
+`setMergerConfig` out of the packaged extension and runs it (5 cases, including that
+Windows is left untouched) instead of grepping for `Z:`, which could not tell a correct
+conversion from a backwards one.
+
 ## Verification (2026-06-23, CachyOS host)
 
 - ✅ Image builds; toolchain present (node 22.23, pnpm 11.9, .NET SDK 9.0.315, appimagetool, patchelf).

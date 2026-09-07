@@ -51,6 +51,13 @@ node "$REPO_ROOT/build/patch-witcher3-proton-docs.cjs" "$SRC"
 echo ">> Patching core (run Windows tools through Proton) ..."
 node "$REPO_ROOT/build/patch-linux-proton-tools.cjs" "$SRC"
 
+# 1d. Downstream Linux source fix: Vortex writes the W3 Script Merger's config for the user
+#     with POSIX paths, but the merger is a Windows .NET tool running in the game's Proton
+#     prefix. It does not reject them - it silently merges to a junk path, so merges appear
+#     to work and do nothing. See docs/AS-BUILT.md.
+echo ">> Patching witcher3 extension (script merger paths) ..."
+node "$REPO_ROOT/build/patch-witcher3-scriptmerger-paths.cjs" "$SRC"
+
 # 2. Install deps, then build + package.
 #    NOTE: we deliberately do NOT use upstream's `package:nosign` wrapper, which runs
 #    `nx run-many -t build lint typecheck` concurrently across 151 projects. On the

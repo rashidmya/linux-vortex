@@ -144,7 +144,7 @@ jobs:
           set -euo pipefail
           RUN="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           if [ "$RESULT" = "success" ]; then
-            BODY="CI build and the 18-check smoke gate passed.
+            BODY="CI build and the 19-check smoke gate passed.
 
           Download the AppImage from the Artifacts section of $RUN, \`chmod +x\` it (the
           artifact zip strips the executable bit), and do the host pass before merging."

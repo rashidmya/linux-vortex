@@ -48,45 +48,15 @@ jobs:
             echo "make_latest=true"  >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Generate release notes
-        run: |
-          set -euo pipefail
-          PINNED="$(tr -d '[:space:]' < pinned-commit)"
-          # pinned-version only exists once we track a release tag; before the first bump
-          # the pin was an untagged master commit, so fall back to the bare SHA.
-          VERSION=""
-          [ -f pinned-version ] && VERSION="$(tr -d '[:space:]' < pinned-version)"
-          if [ -n "$VERSION" ]; then
-            SOURCE_LINE="Built from upstream Vortex \`$VERSION\` (\`$PINNED\`)"
-          else
-            SOURCE_LINE="Built from upstream Vortex \`$PINNED\`"
-          fi
-          {
-            echo "**UNOFFICIAL** build of [Vortex](https://github.com/Nexus-Mods/Vortex) (Nexus Mods),"
-            echo "packaged as a native Linux AppImage. **Not affiliated with or endorsed by Nexus Mods.** GPL-3.0. Beta quality."
-            echo ""
-            echo "## Download & run"
-            echo '```bash'
-            echo "chmod +x linux-vortex-*-x86_64.AppImage"
-            echo "./linux-vortex-*-x86_64.AppImage          # add --appimage-extract-and-run if you do not have libfuse2"
-            echo '```'
-            echo ""
-            echo "Self-contained (bundles Electron + .NET 9). **Wine is NOT required** to run Vortex or deploy mods."
-            echo "Windows game tools (script mergers, Fluffy Mod Manager, ...) are launched through the game's"
-            echo "Steam Proton prefix automatically; Wine is only needed for tools of non-Steam installs."
-            echo ""
-            echo "$SOURCE_LINE — source: https://github.com/Nexus-Mods/Vortex/tree/$PINNED"
-            echo "See \`docs/UNOFFICIAL-NOTICE.md\` for licensing/trademark details."
-          } > release-notes.md
-          cat release-notes.md
-
+      # Release notes are just the generated PR changelog (grouped by label via
+      # .github/release.yml). The standing "what this is / how to run it" preamble lives in
+      # the README and docs/UNOFFICIAL-NOTICE.md; repeating it on every release was noise.
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: linux-vortex ${{ steps.tag.outputs.tag }} (unofficial)
-          body_path: release-notes.md
-          generate_release_notes: true   # append the PR changelog since the previous tag
+          generate_release_notes: true   # the PR changelog since the previous tag
           files: out/linux-vortex-*-x86_64.AppImage
           fail_on_unmatched_files: true
           prerelease: ${{ steps.tag.outputs.prerelease }}
