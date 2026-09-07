@@ -153,7 +153,9 @@ if (failures > 0) {
 }
 
 const dest = path.join(srcRoot, HELPER_DEST);
-if (fs.existsSync(dest)) {
+// A leftover copy of our own helper (untracked, so it survives the build's checkout -f) is
+// fine; a file upstream now ships at this path is not.
+if (fs.existsSync(dest) && !fs.readFileSync(dest, 'utf8').includes(MARKER)) {
   console.error('!! upstream now ships ' + HELPER_DEST + '; re-review before overwriting it.');
   process.exit(1);
 }
