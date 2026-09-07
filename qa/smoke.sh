@@ -75,7 +75,8 @@ grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
 grep -aq 'no Proton prefix found for game' "$ASAR" 2>/dev/null \
   && ok "Proton game paths helper present in app.asar" || no "Proton game paths helper present in app.asar"
 W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
-grep -aq 'getGameDocumentsPath' "$W3" 2>/dev/null \
+# getWitcher3DocumentsPath only exists in the rewritten patch; the older one also had a getGameDocumentsPath.
+grep -aq 'getWitcher3DocumentsPath' "$W3" 2>/dev/null \
   && ok "witcher3 extension resolves documents through the helper" \
   || no "witcher3 extension resolves documents through the helper"
 # gamebryo-plugin-management is not built on Linux (win32-gated build script; no libloot),
