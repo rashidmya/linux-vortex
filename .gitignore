@@ -9,5 +9,7 @@
 /tools/bin/
 # Internal planning docs (brainstorming spec + implementation plan) — kept local, not distributed
 /docs/superpowers/
+# Claude Code local worktrees
+/.claude/worktrees/
 # OS / editor noise
 .DS_Store
