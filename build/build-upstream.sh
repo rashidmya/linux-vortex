@@ -49,6 +49,8 @@ node "$REPO_ROOT/build/patch-linux-game-paths.cjs" "$SRC"
 # 1c. Downstream Linux source fix: the Witcher 3 extension's load order file, menu mods and
 #     "open documents" action all resolve through the helper from 1b (must run after it).
 #     See docs/AS-BUILT.md.
+echo ">> Verifying the Witcher 3 documents patch against upstream sources ..."
+node "$REPO_ROOT/qa/test-witcher3-proton-docs.cjs" "$SRC"
 echo ">> Patching witcher3 extension (Proton documents path) ..."
 node "$REPO_ROOT/build/patch-witcher3-proton-docs.cjs" "$SRC"
 

@@ -119,10 +119,13 @@ Converted consumers:
   deployment target, the settings mergers (`mergers.ts`, not registered upstream today) and
   the "open documents folder" toolbar action, which the first fix had missed. The
   extension-local wrapper is named `getWitcher3DocumentsPath` (it appends the game folder;
-  the core helper returns the Documents root). After patching, the script scans the whole
-  extension for a bare `getLoadOrderFilePath()` / `getWitcher3DocumentsPath()` call and fails
-  the build if an upstream bump adds one. Real-install verification is recorded at the end
-  of this section. Menu mods deployed to `~/Documents` before the first fix are orphaned
+  the core helper returns the Documents root). This includes the newer load-order file
+  existence check in `loadOrder.tsx` and the DX12 settings health check and fix. Before
+  writing, the script scans the whole extension for a bare `getLoadOrderFilePath()`,
+  `getWitcher3DocumentsPath()` or `getDx12UserSettingsPath()` call and fails
+  the build if an upstream bump adds one; repeat invocations also run this guard.
+  Real-install verification of the original fix is recorded at the end of this section.
+  Menu mods deployed to `~/Documents` before the first fix are orphaned
   there and need removing by hand.
 - **gamebryo-savegame-management** and **local-gamesettings** (`My Games`): converted by
   the core patch. *Fixture-verified only* — no Bethesda game was available to test on.
@@ -271,6 +274,11 @@ incomplete. Confirmed from `~/.config/Vortex/vortex.log` on CachyOS:
   tag, not `master`, which has diverged from the release line.
 - A bump PR is never merged on green alone: the smoke gate is static, so the AppImage
   artifact gets a host pass (launch, scripted FOMOD install, `nxm://`, deploy) first.
-- The anchors in all three `build/patch-*.cjs` scripts and the ini backend's sha256 guard
-  hard-fail the build by design. On a bump that means a red PR, which is the point - do not
-  loosen a guard to make one pass.
+- The code anchors in `build/patch-*.cjs` and the ini backend's sha256 guard hard-fail
+  the build when reviewed code changes. No patch can safely accommodate arbitrary future
+  upstream changes. The Witcher 3 documents patch preserves upstream's `./common` import
+  bindings when adding its helper, so unrelated import cleanup, reordering and line wrapping
+  do not require a patch refresh. Missing or ambiguous imports still fail before writes.
+  `qa/test-witcher3-proton-docs.cjs <unpatched upstream source root>` checks both reviewed
+  import layouts, formatting variants, repeat runs and rejection of changed code. The build
+  runs it on disposable source copies before applying the patch or installing dependencies.

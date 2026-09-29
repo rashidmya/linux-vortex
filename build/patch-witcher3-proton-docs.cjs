@@ -12,8 +12,8 @@
  * The prefix itself is resolved by util.getGameDocumentsPath(gamePath), installed into
  * Vortex core by build/patch-linux-game-paths.cjs (run that first). This script threads
  * the discovered game path to every documents-path site in the extension: the load order
- * file (iniParser, index, mergeBackup), the menu mod deployment target, the settings
- * mergers, and the "open documents folder" toolbar action.
+ * file (iniParser, index, mergeBackup, loadOrder), the menu mod deployment target, the settings
+ * mergers, the DX12 settings health check, and the "open documents folder" toolbar action.
  *
  * Usage: node build/patch-witcher3-proton-docs.cjs <upstream Vortex source root>
  * Idempotent; fails the build if any anchor is missing, so an upstream change to these
@@ -25,6 +25,16 @@ const path = require('path');
 
 const MARKER = '[linux-vortex] proton documents';
 const EXT_REL = path.join('extensions', 'games', 'game-witcher3', 'src');
+
+// Import cleanup is independent of the code we patch. Preserve upstream's bindings
+// instead of requiring a particular list/order (e.g. LOCKED_PREFIX was removed from
+// iconbarActions.ts and CONFIG_MATRIX_FILES from mergers.ts in 41be6d455656).
+// Still require exactly one named import from ./common; changed code anchors below
+// continue to require review.
+const DOCUMENTS_IMPORT = {
+  find: /^import\s*\{[^{}]*\}\s*from\s*(["'])\.\/common\1[ \t]*;/gm,
+  replace: (text) => text.replace('{', '{ getWitcher3DocumentsPath,'),
+};
 
 const EDITS = [
   {
@@ -48,21 +58,7 @@ export function getLoadOrderFilePath(gamePath?: string) {
   },
   {
     file: 'util.ts',
-    find: `import {
-  GAME_ID,
-  LOCKED_PREFIX,
-  I18N_NAMESPACE,
-  ACTIVITY_ID_IMPORTING_LOADORDER,
-  PART_SUFFIX,
-} from "./common";`,
-    replace: `import {
-  GAME_ID,
-  LOCKED_PREFIX,
-  I18N_NAMESPACE,
-  ACTIVITY_ID_IMPORTING_LOADORDER,
-  PART_SUFFIX,
-  getWitcher3DocumentsPath,
-} from "./common";`,
+    ...DOCUMENTS_IMPORT,
   },
   {
     file: 'util.ts',
@@ -117,8 +113,7 @@ export const getDocumentsPath = (api: types.IExtensionApi) => {
   },
   {
     file: 'iconbarActions.ts',
-    find: `import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX } from "./common";`,
-    replace: `import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX, getWitcher3DocumentsPath } from "./common";`,
+    ...DOCUMENTS_IMPORT,
   },
   {
     file: 'iconbarActions.ts',
@@ -151,14 +146,7 @@ import { actions, selectors, types, util } from "@nexusmods/vortex-api";`,
     // handlers are not registered upstream today (registerMerge is commented out), but leave
     // them correct rather than a landmine.
     file: 'mergers.ts',
-    find: `import { GAME_ID, CONFIG_MATRIX_REL_PATH, CONFIG_MATRIX_FILES, VORTEX_BACKUP_TAG } from "./common";`,
-    replace: `import {
-  GAME_ID,
-  CONFIG_MATRIX_REL_PATH,
-  CONFIG_MATRIX_FILES,
-  VORTEX_BACKUP_TAG,
-  getWitcher3DocumentsPath,
-} from "./common";`,
+    ...DOCUMENTS_IMPORT,
   },
   {
     file: 'mergers.ts',
@@ -202,16 +190,89 @@ const readFile = (name) => {
   return contents.get(name);
 };
 
+// Check staged contents before writing. Also run on repeat invocations: a marker must
+// not hide a newly added call that would fall back to the host documents directory.
+function checkGamePaths() {
+  const bareCalls = [];
+  for (const rel of fs.readdirSync(extDir, { recursive: true })) {
+    if (!/\.tsx?$/.test(rel)) {
+      continue;
+    }
+    const text = contents.get(rel) ?? fs.readFileSync(path.join(extDir, rel), 'utf8');
+    if (/\b(?:getLoadOrderFilePath|getWitcher3DocumentsPath|getDx12UserSettingsPath)\(\s*\)/.test(text)) {
+      bareCalls.push(rel);
+    }
+  }
+  if (bareCalls.length > 0) {
+    console.error('!! ' + EXT_REL + ': documents-path helper called without a game path in: ' +
+      bareCalls.join(', ') + '. Thread the discovered game path through (see this script). ' +
+      'Nothing was written.');
+    process.exit(1);
+  }
+}
+
 // Already patched? Every edit is applied together, so one marker is enough.
 if (readFile('common.ts').includes(MARKER)) {
+  checkGamePaths();
   console.log('>> witcher3 proton documents: already patched');
   process.exit(0);
+}
+
+// 41be6d455656 added this existence check; the older pinned release has no reference
+// to the helper in loadOrder.tsx. If a reference is present, require the reviewed code
+// instead of silently skipping an unfamiliar use of the helper.
+if (/\bgetLoadOrderFilePath\b/.test(readFile('loadOrder.tsx'))) {
+  EDITS.push({
+    file: 'loadOrder.tsx',
+    find: '      if (iniStructure.revertedByPurge || !(await fileExists(getLoadOrderFilePath()))) {',
+    replace: `      // ${MARKER}: check for mods.settings inside the discovered game's prefix.
+      const discovery = this.mApi.getState().settings.gameMode.discovered[GAME_ID];
+      if (
+        iniStructure.revertedByPurge ||
+        !(await fileExists(getLoadOrderFilePath(discovery?.path)))
+      ) {`,
+  });
+}
+
+// The newer release also checks/fixes dx12user.settings. Route both the health check
+// and its fix through the same documents helper; older releases have neither site.
+if (/\bgetDx12UserSettingsPath\b/.test(readFile('common.ts'))) {
+  EDITS.push(
+    {
+      file: 'common.ts',
+      find: `export function getDx12UserSettingsPath() {
+  return path.join(util.getVortexPath("documents"), "The Witcher 3", DX12_USER_SETTINGS_FILENAME);
+}`,
+      replace: `export function getDx12UserSettingsPath(gamePath?: string) {
+  return path.join(getWitcher3DocumentsPath(gamePath), DX12_USER_SETTINGS_FILENAME);
+}`,
+    },
+    {
+      file: 'healthChecks.ts',
+      find: 'async function enableLocalMods(): Promise<void> {',
+      replace: 'async function enableLocalMods(api: types.IExtensionApi): Promise<void> {',
+    },
+    {
+      file: 'healthChecks.ts',
+      find: 'getDx12UserSettingsPath()',
+      replace: 'getDx12UserSettingsPath(selectors.discoveryByGame(api.getState(), GAME_ID)?.path)',
+      all: true,
+      expect: 2,
+    },
+    {
+      file: 'healthChecks.ts',
+      find: '  fix: () => enableLocalMods(),',
+      replace: '  fix: (api) => enableLocalMods(api),',
+    },
+  );
 }
 
 let failures = 0;
 for (const edit of EDITS) {
   const text = readFile(edit.file);
-  const occurrences = text.split(edit.find).length - 1;
+  const occurrences = edit.find instanceof RegExp
+    ? [...text.matchAll(edit.find)].length
+    : text.split(edit.find).length - 1;
   if (edit.all && edit.expect === undefined) {
     throw new Error(edit.file + ': replace-all edits must declare an expected count');
   }
@@ -219,7 +280,7 @@ for (const edit of EDITS) {
   if (occurrences !== wanted) {
     console.error('!! ' + edit.file + ': expected ' + wanted + ' occurrence(s) of the anchor, found ' +
       occurrences);
-    console.error('   anchor: ' + edit.find.split('\n')[0].trim() + ' ...');
+    console.error('   anchor: ' + String(edit.find).split('\n')[0].trim() + ' ...');
     failures++;
     continue;
   }
@@ -233,29 +294,10 @@ if (failures > 0) {
   process.exit(1);
 }
 
+checkGamePaths();
 for (const [name, text] of contents) {
   fs.writeFileSync(path.join(extDir, name), text);
   console.log('   patched: ' + path.join(EXT_REL, name));
-}
-
-// The anchors above only guard the sites we edit. A new bare call added anywhere else in the
-// extension by an upstream bump would silently fall back to the host documents dir, so scan
-// the whole tree for one and fail the build if found.
-// (Runs after the writes on purpose: the tree is left patched so the offending file is easy to inspect.)
-const bareCalls = [];
-for (const rel of fs.readdirSync(extDir, { recursive: true })) {
-  if (!/\.tsx?$/.test(rel)) {
-    continue;
-  }
-  const text = fs.readFileSync(path.join(extDir, rel), 'utf8');
-  if (/\bgetLoadOrderFilePath\(\s*\)/.test(text) || /\bgetWitcher3DocumentsPath\(\s*\)/.test(text)) {
-    bareCalls.push(rel);
-  }
-}
-if (bareCalls.length > 0) {
-  console.error('!! ' + EXT_REL + ': documents-path helper called without a game path in: ' +
-    bareCalls.join(', ') + '. Thread the discovered game path through (see this script).');
-  process.exit(1);
 }
 
 console.log('>> witcher3 proton documents: patched ' + contents.size + ' file(s)');
