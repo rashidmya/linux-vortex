@@ -75,15 +75,18 @@ grep -aq 'NATIVE_INI_FUNCS' "$ASAR" 2>/dev/null \
 # bundler never mangles.
 grep -aq 'no Proton prefix found for game' "$ASAR" 2>/dev/null \
   && ok "Proton game paths helper present in app.asar" || no "Proton game paths helper present in app.asar"
+# Every extension's util.getVortexPath resolves in its game's prefix: the require hook
+# (util/extensionRequire.ts) must call the helper's utilForExtension. A module export, so the
+# property name survives minification, and only the call site is followed by "(".
+RENDERER="$(mktemp -d)/renderer.js"
+python3 "$REPO_ROOT/qa/extract-asar-file.py" "$ASAR" /renderer.js "$RENDERER" >/dev/null 2>&1
+grep -q 'utilForExtension)(' "$RENDERER" 2>/dev/null \
+  && ok "extensions get Proton game paths (per-extension util)" \
+  || no "extensions get Proton game paths (per-extension util)"
 W3="$APPDIR/resources/app.asar.unpacked/bundledPlugins/game-witcher3/index.cjs"
-# The older witcher3-only patch also had a getGameDocumentsPath *definition*; only the
-# rewritten one *calls* util.getGameDocumentsPath, so match the call.
-grep -aq 'util.getGameDocumentsPath(' "$W3" 2>/dev/null \
-  && ok "witcher3 extension resolves documents through the helper" \
-  || no "witcher3 extension resolves documents through the helper"
 # gamebryo-plugin-management is not built on Linux (win32-gated build script; no libloot),
-# so check the two converted extensions that do ship.
-for EXT in gamebryo-savegame-management local-gamesettings; do
+# so check the converted extensions that do ship.
+for EXT in gamebryo-savegame-management gamebryo-test-settings local-gamesettings; do
   BUNDLE="$APPDIR/resources/app.asar.unpacked/bundledPlugins/$EXT/index.cjs"
   grep -aq 'getGameDocumentsPath' "$BUNDLE" 2>/dev/null \
     && ok "$EXT resolves My Games through the helper" \
@@ -98,14 +101,14 @@ grep -aq 'running Windows executable through Proton' "$ASAR" 2>/dev/null \
 grep -aq 'Could not read compatdata config_info' "$ASAR" 2>/dev/null \
   && ok "Proton build resolved from the game's prefix" || no "Proton build resolved from the game's prefix"
 
-# Proton routing matches on the working directory as well as the executable path
-# (qa/test-proton-matching.cjs, run against the packaged renderer bundle).
-RENDERER="$(mktemp -d)/renderer.js"
-if python3 "$REPO_ROOT/qa/extract-asar-file.py" "$ASAR" /renderer.js "$RENDERER" >/dev/null 2>&1 \
-   && node "$REPO_ROOT/qa/test-proton-matching.cjs" "$RENDERER" >/dev/null 2>&1; then
-  ok "Proton routing matches on working directory"
+# Proton routing picks the tool's own game: it matches on the working directory as well as
+# the executable path, and on whole folders ("Fallout 4 VR" is not inside "Fallout 4"), for
+# api.runExecutable and dashboard launches (qa/test-proton-matching.cjs, run against the
+# packaged renderer bundle).
+if [ -s "$RENDERER" ] && node "$REPO_ROOT/qa/test-proton-matching.cjs" "$RENDERER" >/dev/null 2>&1; then
+  ok "Proton routing picks the tool's own game"
 else
-  no "Proton routing matches on working directory"
+  no "Proton routing picks the tool's own game"
 fi
 
 # W3 Script Merger is configured with Windows paths, not POSIX ones

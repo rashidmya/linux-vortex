@@ -81,7 +81,7 @@ fails the build instead of silently dropping the fix. `qa/test-linux-ini.cjs` (8
 run in the build) exercises it through the real `IniParser`/`IniFile` API, including the
 Witcher 3 enable/disable sequence.
 
-## Proton game paths (2026-09-07; supersedes the Witcher 3-only fix of 2026-09-06)
+## Proton game paths (2026-09-30: every game; supersedes the per-game fixes of 2026-09-06/07)
 
 A game running under Steam Proton reads its per-user Windows folders from *inside* its
 compatdata prefix:
@@ -89,74 +89,94 @@ compatdata prefix:
 ```
 <library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/Documents
 <library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/AppData/Local
+<library>/steamapps/compatdata/<appid>/pfx/drive_c/users/steamuser/AppData/Roaming
 ```
 
-Upstream resolves both through `util.getVortexPath('documents' | 'localAppData')`, i.e. the
-host's `~/Documents` and a Windows-only `~/Local` on Linux, so anything Vortex writes there
-for the game lands where the game never looks. For The Witcher 3 that was `mods.settings`
-(mod priority and enable/disable had no in-game effect) and the `witcher3menumoddocuments`
-mod type; for the gamebryo games it is `plugins.txt` itself.
+Game extensions resolve these through `util.getVortexPath('documents' | 'localAppData' |
+'appData')`, which on Linux reports the host's `~/Documents`, `~/.config` and a nonexistent
+`~/Local`. So anything Vortex wrote there for the game landed where the game never looks: The
+Witcher 3's `mods.settings` (mod priority and enable/disable had no in-game effect), menu mods,
+`plugins.txt` and `My Games` for the gamebryo games, and every game whose mods deploy into
+Documents (The Sims, TESO, Dragon Age, Neverwinter Nights, BattleTech, ...). Patching game
+extensions one by one could never cover the downloadable ones from Nexus Mods, which is most
+games.
 
-`build/patch-linux-game-paths.cjs` installs `build/patches/vortex/gamePaths.ts` as
-`src/renderer/src/util/linux/gamePaths.ts` and exports it from `util/api.ts`, so extensions
-get `util.getGameDocumentsPath(gamePath)` / `util.getGameLocalAppDataPath(gamePath)` /
-`util.getProtonUserDir(gamePath)`. Resolution, all synchronous: not Linux or no path → host
-fallback; the path must be `<library>/steamapps/common/<dir>`; the app id is the
-`appmanifest_*.acf` whose `installdir` matches `<dir>` (case-insensitive — no per-game id
-lists; manifests are scanned in sorted order and the first with an existing prefix wins);
-`compatdata/<id>/pfx/drive_c/users/steamuser` must exist. Any miss falls back to
-`getVortexPath`, so GOG/Epic/Heroic installs, native Linux builds and Windows are unchanged,
-and a `debug`-level log line records the fallback for Steam-looking paths. The patch refuses
-to overwrite a file upstream might ship at that path (unless it is our own leftover from a
-previous build in the persistent volume), and fails the build on any anchor drift.
-`qa/test-game-paths.cjs` (14 cases, run in the build right after `pnpm install`, using
-upstream's TypeScript compiler) covers each branch against a fake Steam library.
+`build/patch-linux-game-paths.cjs` fixes it in core, once:
 
-Converted consumers:
+1. **Helper.** Installs `build/patches/vortex/gamePaths.ts` as
+   `src/renderer/src/util/linux/gamePaths.ts` and exports `util.getGameDocumentsPath(gamePath)`
+   / `util.getGameLocalAppDataPath(gamePath)` / `util.getProtonUserDir(gamePath)`. Resolution,
+   all synchronous: not Linux or no path → host fallback; the path must be
+   `<library>/steamapps/common/<dir>`; the app id is the `appmanifest_*.acf` whose
+   `installdir` matches `<dir>` (case-insensitive — no per-game id lists; manifests are
+   scanned in sorted order and the first with an existing prefix wins);
+   `compatdata/<id>/pfx/drive_c/users/steamuser` must exist. Any miss falls back to
+   `getVortexPath`, so GOG/Epic/Heroic installs, native Linux builds and Windows are unchanged.
+   The answer is cached per game folder: a found prefix is re-checked with one `stat`, a miss
+   is retried after 10 s, so a game first launched through Proton while Vortex runs is picked
+   up without a restart.
+2. **Every extension.** Upstream's require hook (`util/extensionRequire.ts`) already hands
+   each extension its own proxy of `vortex-api` (to prefix its log lines). The patch adds
+   `util` to that proxy: the extension's `util.getVortexPath` answers `documents`,
+   `localAppData` and `appData` inside the prefix of **the game the extension works for**, and
+   everything else as before. That game is:
+   - for a game extension, its own game (matched through the `extensionPath` Vortex records
+     for every registered game) — also while another game is managed, which matters because
+     a game's `setup` runs before a switch to it is recorded as active. An extension that
+     registered several games uses the managed one if it's among them, else none;
+   - for a shared extension (registered no game: `gamebryo-archive-invalidation`,
+     `open-directory`, community helpers), the managed game — the one being switched *to*
+     while a switch is in progress. Shared extensions keep the host `appData`: roaming AppData
+     is where Vortex and extensions keep their own data, so for them it may not mean the game's.
 
-- **The Witcher 3** (`build/patch-witcher3-proton-docs.cjs`): every documents-path site in
-  the extension — the load order file (`iniParser`, `index`, `mergeBackup`), the menu mod
-  deployment target, the settings mergers (`mergers.ts`, not registered upstream today) and
-  the "open documents folder" toolbar action, which the first fix had missed. The
-  extension-local wrapper is named `getWitcher3DocumentsPath` (it appends the game folder;
-  the core helper returns the Documents root). This includes the newer load-order file
-  existence check in `loadOrder.tsx` and the DX12 settings health check and fix. Before
-  writing, the script scans the whole extension for a bare `getLoadOrderFilePath()`,
-  `getWitcher3DocumentsPath()` or `getDx12UserSettingsPath()` call and fails
-  the build if an upstream bump adds one; repeat invocations also run this guard.
-  Real-install verification of the original fix is recorded at the end of this section.
-  Menu mods deployed to `~/Documents` before the first fix are orphaned
-  there and need removing by hand.
-- **gamebryo-savegame-management** and **local-gamesettings** (`My Games`): converted by
-  the core patch. *Fixture-verified only* — no Bethesda game was available to test on.
-  Windows behaviour is unchanged: the helper delegates to `getVortexPath("documents")` off
-  Linux.
-- **gamebryo-plugin-management** (`plugins.txt`): also converted, but that extension is
-  not built on Linux today — its `build` script is win32-gated because libloot has no Linux
-  build (see the libloot notes below). The edit is carried so the fix is already in place if
-  that ever changes; the anchor check fails the build if upstream moves it. Its Windows code
-  path is byte-for-byte upstream's, behind an early return.
+   Vortex core keeps calling the real `getVortexPath`, so its own data never moves. `home` is
+   never redirected (extensions use it for native Linux paths such as `~/.factorio`).
+   The same edit makes the hook attribute a file to its extension exactly. Upstream's
+   `filename.startsWith(ext.path)` hands every file in `game-fallout4vr` to `game-fallout4`
+   (and `darksouls2` to `darksouls`, `dragonage2` to `dragonage`, ...), whichever loads first —
+   which would have resolved Fallout 4 VR's paths in Fallout 4's prefix.
+3. **Shared gamebryo modules**, which work for a game they're told about rather than the
+   managed one (`local-gamesettings` swaps ini files for the game being switched *away from*
+   too): `gamebryo-savegame-management`, `gamebryo-test-settings` and `local-gamesettings`
+   (`My Games`) pass the game's discovered path to `util.getGameDocumentsPath`;
+   `gamebryo-plugin-management` (`plugins.txt`) to `util.getGameLocalAppDataPath`. The last is
+   not built on Linux today — its `build` script is win32-gated because libloot has no Linux
+   build (see the libloot notes below); the edit is carried so the fix is already in place if
+   that ever changes. Their Windows code paths are byte-for-byte upstream's.
 
-Deferred, deliberately:
+The Witcher 3-only documents patch (`build/patch-witcher3-proton-docs.cjs`, 12+ anchors
+across the extension) was retired: every site it rewrote calls `util.getVortexPath` from the
+Witcher 3 extension at run time, which (2) now resolves in The Witcher 3's prefix.
 
-- `ini_prep`: `genIniFormat('winapi')` returns `undefined` off Windows
-  (`src/renderer/src/extensions/ini_prep/index.ts:58`), so ini tweaks are inert on Linux
-  regardless of path. Lifting that gate is a separate change.
-- `open-directory` (cosmetic "open folder" buttons) and the per-game extensions that
-  hand-roll `getVortexPath("documents")` (or `"localAppData"`, for bg3) (sims3/4, teso,
-  dragonage/2, bg3, divinity2, x4,
-  torchlight2, battletech, nwn/2, galciv3, grimrock, dawnofman, modtype-dazip): one small
-  edit each, to be done when someone can verify the game in question.
+Not covered, by design or for now:
 
-Smoke (`qa/smoke.sh`) checks the helper's debug-log string in `app.asar` and the
-`util.getGameDocumentsPath` call in the Witcher 3 bundle and in the two gamebryo bundles
-that ship on Linux (a property access on the external vortex-api namespace, which the
-extension bundler never mangles).
+- **Values an extension computes while it loads** resolve to host paths, as before: at that
+  point no game is registered and there is no store to find one in. Among bundled extensions:
+  `game-masterchiefcollection`, `game-pillarsofeternity2`, `game-prisonarchitect`,
+  `game-daggerfallunity` (module-level `LocalLow`/`Local` constants), `modtype-dazip` and
+  `script-extender-error-check` (module-level tables).
+- **Extensions that read `process.env.LOCALAPPDATA` / `APPDATA` / `USERPROFILE`** directly:
+  undefined on Linux, and per-game environment variables aren't possible.
+- **Core's own game paths**: `ini_prep` (inert on Linux anyway — `genIniFormat('winapi')`
+  returns `undefined` off win32) and the FOMOD installer's ini conditions for Bethesda games
+  (`installer_fomod_shared/utils/gameSupport.ts`).
+- **A native Linux game with a leftover prefix** (run through Proton once, then switched back)
+  resolves to the prefix; nothing synchronous says which of the two Steam will run.
 
-Real-install verification: _pending — open item until run on the CachyOS host's Steam
-Witcher 3: toggle a mod and change a priority and confirm `mods.settings` is rewritten under
-the prefix (not `~/Documents`), deploy a menu mod there, and check the toolbar button opens
-that folder._
+`qa/test-game-paths.cjs` (33 cases, run in the build right after `pnpm install`, using
+upstream's TypeScript compiler, a fresh helper per case) covers the resolution, the cache and
+the extension-to-game rules against a fake Steam library. `qa/test-extension-require.cjs`
+(8 cases) transpiles the *patched* upstream `extensionRequire.ts` and requires `vortex-api`
+through it the way an extension does; against unpatched upstream it fails, including on the
+`game-fallout4vr` attribution. Smoke (`qa/smoke.sh`) checks the helper's debug-log string in
+`app.asar`, the `utilForExtension` call in the packaged renderer, and the
+`util.getGameDocumentsPath` call in the three gamebryo bundles that ship on Linux.
+
+Real-install verification: _pending — run on the CachyOS host's Steam Witcher 3: toggle a
+mod and change a priority and confirm `mods.settings` is rewritten under the prefix (not
+`~/Documents`), deploy a menu mod there, and check the toolbar button opens that folder._
+Menu mods deployed to `~/Documents` before any of these fixes are orphaned there and need
+removing by hand.
 
 ## Windows tools through Proton (2026-09-06)
 
@@ -169,7 +189,7 @@ Vortex already runs Windows executables on Linux: `StarterInfo.runDirectly` call
 binary on Linux fails with `EACCES`, which Vortex renders as
 "Network connect was not permitted, please check your firewall settings".
 
-`build/patch-linux-proton-tools.cjs` makes two source changes:
+`build/patch-linux-proton-tools.cjs` makes three source changes:
 
 1. **`ExtensionManager.ts`** — `api.runExecutable` applies the same Proton routing: on
    non-Windows, if the executable is a Windows one and lives inside a Steam game folder that
@@ -181,6 +201,17 @@ binary on Linux fails with `EACCES`, which Vortex renders as
    (i.e. it's on the default), prefer the Proton build recorded in the prefix's own
    `compatdata/<appid>/config_info` over "newest installed". Running a different build against
    a prefix makes Proton upgrade or downgrade it behind the user's back.
+3. **`util/StarterInfo.ts`** (2026-09-30), and the same rule in (1) — a tool belongs to a game
+   when its path or working directory is the game folder or below it. Upstream's
+   `shouldRunWithProton` tested for a plain string prefix, so everything in
+   `common/Fallout 4 VR` also matched `common/Fallout 4` (and `SkyrimVR` /
+   `Skyrim Special Edition` matched `Skyrim`). With both installed, F4SE VR's loader ran in
+   whichever of the two prefixes Steam listed first — reproduced against the packaged
+   bundle before the fix.
+
+`qa/test-proton-matching.cjs` lifts both `findProtonGameFor` and `shouldRunWithProton` out of
+the packaged renderer bundle and runs them against stub Steam entries (12 cases, including the
+Fallout 4 / Fallout 4 VR pair); the smoke gate runs it.
 
 Verified by hand before building: `STEAM_COMPAT_DATA_PATH=… STEAM_COMPAT_CLIENT_INSTALL_PATH=…
 "<proton>/proton" run WitcherScriptMerger.exe` starts the merger (Proton bundles wine-mono,
@@ -276,9 +307,5 @@ incomplete. Confirmed from `~/.config/Vortex/vortex.log` on CachyOS:
   artifact gets a host pass (launch, scripted FOMOD install, `nxm://`, deploy) first.
 - The code anchors in `build/patch-*.cjs` and the ini backend's sha256 guard hard-fail
   the build when reviewed code changes. No patch can safely accommodate arbitrary future
-  upstream changes. The Witcher 3 documents patch preserves upstream's `./common` import
-  bindings when adding its helper, so unrelated import cleanup, reordering and line wrapping
-  do not require a patch refresh. Missing or ambiguous imports still fail before writes.
-  `qa/test-witcher3-proton-docs.cjs <unpatched upstream source root>` checks both reviewed
-  import layouts, formatting variants, repeat runs and rejection of changed code. The build
-  runs it on disposable source copies before applying the patch or installing dependencies.
+  upstream changes; keeping game fixes in core rather than in each game extension keeps the
+  number of anchors an upstream bump can break small.

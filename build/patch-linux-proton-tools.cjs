@@ -21,6 +21,13 @@
  * config_info) over "newest installed". Running a different build against a prefix makes
  * Proton upgrade/downgrade it behind the user's back.
  *
+ * Patch 3 (util/StarterInfo.ts, and the matching in patch 1): a tool belongs to a game when
+ * its path or working directory is the game's folder or inside it. Upstream's
+ * shouldRunWithProton tested for a plain string prefix, so everything in
+ * "common/Fallout 4 VR" also matched "common/Fallout 4" (SkyrimVR and
+ * "Skyrim Special Edition" matched "Skyrim"), and a tool ran in whichever of those games'
+ * prefixes Steam listed first.
+ *
  * Usage: node build/patch-linux-proton-tools.cjs <upstream Vortex source root>
  * Idempotent; fails the build if any anchor is missing.
  */
@@ -31,6 +38,7 @@ const path = require('path');
 const MARKER = '[linux-vortex] proton tools';
 const EXT_MANAGER = path.join('src', 'renderer', 'src', 'ExtensionManager.ts');
 const PROTON = path.join('src', 'renderer', 'src', 'util', 'linux', 'proton.ts');
+const STARTER = path.join('src', 'renderer', 'src', 'util', 'StarterInfo.ts');
 
 const EDITS = [
   {
@@ -79,8 +87,16 @@ import type { ISteamEntry, Steam } from "./util/Steam";`,
   ): Promise<ISteamEntry | undefined> => {
     try {
       const games = (await this.getSteamStore()?.allGames()) ?? [];
-      const inGameFolder = (candidate: string | undefined, gamePath: string) =>
-        candidate !== undefined && candidate.toLowerCase().startsWith(gamePath.toLowerCase());
+      // The folder itself or anything below it - not a sibling whose name starts the same
+      // way ("Fallout 4 VR" is not inside "Fallout 4"). Same test as shouldRunWithProton.
+      const inGameFolder = (candidate: string | undefined, gamePath: string) => {
+        if (candidate === undefined) {
+          return false;
+        }
+        const file = candidate.toLowerCase();
+        const folder = gamePath.toLowerCase();
+        return file === folder || file.startsWith(folder + path.sep);
+      };
       const match = games.find(
         (game) =>
           inGameFolder(workingDirectory, game.gamePath) || inGameFolder(exePath, game.gamePath),
@@ -193,6 +209,31 @@ export async function getProtonFromCompatData(compatDataPath: string): Promise<s
  * Find the latest installed Proton version (fallback)
  */`,
   },
+  {
+    file: STARTER,
+    find: `    // Find the game entry that matches this executable's location
+    return games.find(
+      (g) =>
+        info.workingDirectory?.toLowerCase().startsWith(g.gamePath.toLowerCase()) ||
+        info.exePath.toLowerCase().startsWith(g.gamePath.toLowerCase()),
+    );`,
+    replace: `    // Find the game entry that matches this executable's location.
+    // ${MARKER}: the folder itself or anything below it. A plain prefix test put
+    // "common/Fallout 4 VR/f4sevr_loader.exe" in "common/Fallout 4" (and SkyrimVR in Skyrim),
+    // so the tool ran in whichever of the two games' prefixes Steam listed first.
+    const inGameFolder = (candidate: string | undefined, gamePath: string) => {
+      if (candidate === undefined) {
+        return false;
+      }
+      const file = candidate.toLowerCase();
+      const folder = gamePath.toLowerCase();
+      return file === folder || file.startsWith(folder + path.sep);
+    };
+    return games.find(
+      (g) =>
+        inGameFolder(info.workingDirectory, g.gamePath) || inGameFolder(info.exePath, g.gamePath),
+    );`,
+  },
 ];
 
 const srcRoot = process.argv[2];
@@ -201,7 +242,7 @@ if (!srcRoot) {
   process.exit(2);
 }
 const abs = (rel) => path.join(srcRoot, rel);
-for (const rel of [EXT_MANAGER, PROTON]) {
+for (const rel of [EXT_MANAGER, PROTON, STARTER]) {
   if (!fs.existsSync(abs(rel))) {
     console.error('!! not found: ' + abs(rel));
     process.exit(1);
